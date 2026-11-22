@@ -1,0 +1,16 @@
+# Kto może odszyfrować sekrety. Każdy plik: klucze admina (YubiKey 1 i 2) + klucz TEJ maszyny.
+#
+# Klucz admina:   age-plugin-yubikey (slot PIV) → publiczny "age1yubikey1…"
+# Klucz maszyny:  age-keygen -o /var/lib/sops-nix/key.txt (root, 0600) → publiczny "age1…"
+#                 kopia prywatnego klucza: Bitwarden
+# Nowy plik:      sops secrets/justjackpc.yaml
+#
+# Szablon (odkomentować po wygenerowaniu kluczy):
+# keys:
+#   - &admin_yubikey1 age1yubikey1...
+#   - &admin_yubikey2 age1yubikey1...
+#   - &justjackpc age1...
+# creation_rules:
+#   - path_regex: ^secrets/justjackpc\.yaml$
+#     key_groups:
+#       - age: [*admin_yubikey1, *admin_yubikey2, *justjackpc]
