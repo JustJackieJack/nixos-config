@@ -1,0 +1,20 @@
+restic:
+    repo: ENC[AES256_GCM,data:nVgXJPT4uCLMBkzjQxs8eminXvXW45A=,iv:STNh3/KVmAm4BmhE9NmkEqieDc49bmsY9MtvlVG1wV8=,tag:6fAxIyUD8l3We5NgmWk3qg==,type:str]
+    haslo: ENC[AES256_GCM,data:XnMW4tccYDZFrw3QJgpv0MSeIS4=,iv:SwLU8THnYzcITIwgdakc4pY8h1Wczbj2jcD1U8CzGsI=,tag:jJ2GugCoyWA7KzindEHinA==,type:str]
+nas:
+    modele: ENC[AES256_GCM,data:S9qBq8e13FICL3pb4igAzVWZGHureIsCHK/rPJZForE/C63vBo2I7grMMw==,iv:ZokkqobjxxsOHYIkFe51/ZWD3XlMeMLU7UT8g6s9HCA=,tag:n2WTRULyTEW5sBhEZcJ0gg==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBYblNHamhoSGFLMlJWREpz
+            KzdIcHJ6RHVMVGtTb0JFUzFsOTJVQzJhU2dRCk1kaXBmbnBiOSswRmFzSE9vRVdS
+            NTIzeFNBNDB2UU9uS2RkSmEvZ2hQdVEKLS0tIGdacFR6dkhTbThoeUk3VWJpMDl3
+            LzhSdmloa01tYXk5UUNJR1JuT09nSmsKa6fB1q/wzTb2r+x7ez2TtEr22d20itQb
+            8ePvlvvY4BZaTEK33KQrfz6P1Mioi9sRBsYK2kgrEy8eMTy35cu+yw==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1qfh0kuxg3kmxauzaxhvkyax6y7gdad2ktql5ruxgsy57gh30wemq3xhtu0
+    lastmodified: "2026-11-22T22:33:00Z"
+    mac: ENC[AES256_GCM,data:4KSoaSNrbFRo5oq2BrOFD4tXCQLN8s+khnCPRULBDH2E/r8DUTTEOSD4IV0VsfXdwJO8rjJgm8ybb8s06oylufjPnl7Fxfm0biTJbrmXKGVjCQO9VpJJsrhu9/TwWefbXkM5nchDSHDXfCY3bOYWZaAv48fQgqcY007GzfB66MI=,iv:9HmjH+4hMGiXta6Sg1rhmpi+GkZXM91kQSR7VHswV34=,tag:sCGItM6Fp1i3vSQ7XLDJHw==,type:str]
+    unencrypted_suffix: _unencrypted
+    version: 3.13.3

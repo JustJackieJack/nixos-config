@@ -51,8 +51,9 @@ in
   ];
 
   systemd.tmpfiles.rules = [
-    "d /mnt/games 0750 game_user users -"
-    "d /mnt/games/SteamLibrary 0750 game_user users -"
-    "d /mnt/games/Heroic 0750 game_user users -"
+    # 0700: grupa users to wszystkie zwykłe konta (także zeroroot i claude)
+    "d /mnt/games 0700 game_user users -"
+    "d /mnt/games/SteamLibrary 0700 game_user users -"
+    "d /mnt/games/Heroic 0700 game_user users -"
   ];
 }

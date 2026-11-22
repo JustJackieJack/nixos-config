@@ -1,0 +1,4 @@
+# KLUCZ TYLKO DO TESTÓW W MASZYNIE WIRTUALNEJ (tests/vm.nix) – jawny celowo, nie używać nigdzie indziej.
+# created: 2026-11-22T23:33:00+01:00
+# public key: age1qfh0kuxg3kmxauzaxhvkyax6y7gdad2ktql5ruxgsy57gh30wemq3xhtu0
+AGE-SECRET-KEY-12JS9A23GZWRUV9H6ARFTUZ5HS90FTR5DJMU8AK5MACA0CMKCUJGQ5FGTSC

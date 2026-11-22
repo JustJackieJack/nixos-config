@@ -65,15 +65,17 @@ in
         ];
       };
 
-      fileSystems."/mnt/nas/Modele_3D" = {
-        device = "//10.0.190.5/Modele_3D";
+      moje.nas.montowania."/mnt/nas/Modele_3D" = {
+        device = "//${config.moje.nas.adres}/Modele_3D";
         fsType = "cifs";
         options = [
           "credentials=${config.sops.secrets."nas/modele".path}"
           "uid=1000"
           "gid=100"
-          "file_mode=0660"
-          "dir_mode=0770"
+          # tylko Jacek: wszystkie zwykłe konta (claude, game_user, zeroroot) są w grupie users,
+          # więc prawa dla grupy otwierałyby NAS także im (wykrył test VM)
+          "file_mode=0600"
+          "dir_mode=0700"
           "iocharset=utf8"
           "vers=3.0"
           "serverino"
@@ -86,6 +88,7 @@ in
           "x-systemd.idle-timeout=5min"
         ];
       };
+      fileSystems = config.moje.nas.montowania;
     })
   ];
 }

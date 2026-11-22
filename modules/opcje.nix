@@ -34,6 +34,19 @@
       description = "Zapora aplikacyjna OpenSnitch (modules/opensnitch.nix).";
     };
 
+    nas.adres = lib.mkOption {
+      type = lib.types.str;
+      default = "10.0.190.5";
+      description = "Adres NAS (udziały CIFS).";
+    };
+
+    nas.montowania = lib.mkOption {
+      type = lib.types.attrsOf lib.types.anything;
+      default = { };
+      internal = true;
+      description = "Wpisy montowania udziałów NAS (wyliczane w kopie.nix; test VM używa ich ponownie).";
+    };
+
     sekrety.plik = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = null;

@@ -3,7 +3,9 @@
 # Uruchamia NASZE moduły (modules/) na wirtualnym „pc” obok wirtualnego „nas” (udaje LAN)
 # i sprawdza zachowanie na żywym systemie. Pominięte, bo wymagają prawdziwego sprzętu:
 # NVIDIA, Secure Boot, LUKS/disko, ekran logowania (SDDM), snapper (wymaga btrfs),
-# ClamAV (bez internetu nie pobierze bazy wirusów), smartd (wirtualne dyski bez SMART).
+# smartd (wirtualne dyski bez SMART). Pulpit i dyski: tests/pulpit.nix, tests/dyski.nix.
+# ClamAV działa z własną sygnaturą testową (bez internetu nie pobierze prawdziwej bazy),
+# sekrety: plik sops zaszyfrowany JAWNYM kluczem testowym (tests/dane/).
 { pkgs, inputs }:
 pkgs.testers.runNixOSTest {
   name = "justjackpc";
@@ -12,15 +14,44 @@ pkgs.testers.runNixOSTest {
   node.pkgsReadOnly = false; # nasze moduły ustawiają nixpkgs.config (licencje)
 
   nodes.nas = {
-    networking.firewall.allowedTCPPorts = [ 80 ];
+    networking.firewall.allowedTCPPorts = [
+      80
+      445
+      8000
+    ];
     services.nginx = {
       enable = true;
       virtualHosts.default.locations."/".return = "200 'nas-ok'";
     };
+    # repozytorium restic (jak kopia na NAS)
+    services.restic.server = {
+      enable = true;
+      listenAddress = "8000";
+      extraFlags = [ "--no-auth" ];
+    };
+    # udział Modele_3D (jak //10.0.190.5/Modele_3D)
+    users.users.modele.isNormalUser = true;
+    services.samba = {
+      enable = true;
+      settings.Modele_3D = {
+        path = "/srv/modele";
+        "read only" = "no";
+        "valid users" = "modele";
+      };
+    };
+    systemd.tmpfiles.rules = [
+      "d /srv/modele 0777 modele users -"
+      "f /srv/modele/kostka.stl 0644 modele users - solid-test"
+    ];
   };
 
   nodes.pc =
-    { lib, ... }:
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
     {
       imports = [
         inputs.lanzaboote.nixosModules.lanzaboote
@@ -36,9 +67,22 @@ pkgs.testers.runNixOSTest {
       # --- tylko na potrzeby testu (sprzęt / internet) ---
       services.xserver.videoDrivers = lib.mkForce [ "modesetting" ];
       services.displayManager.sddm.enable = lib.mkForce false;
-      services.clamav.daemon.enable = lib.mkForce false;
-      services.clamav.clamonacc.enable = lib.mkForce false;
+      # ClamAV: bez pobierania bazy, za to własna sygnatura (MD5 pliku testowego)
       services.clamav.updater.enable = lib.mkForce false;
+      systemd.tmpfiles.rules = [
+        "L+ /var/lib/clamav/test.hdb - - - - ${pkgs.writeText "test.hdb" "c59e105b47e44a9c9121b5705e130aea:33:Test.JustJack.Zly\n"}"
+      ];
+      # sekrety: testowy plik sops + jawny klucz testowy
+      moje.sekrety.plik = ./dane/sekrety-testowe.yaml;
+      # NAS w sieci testowej; moduł maszyny wirtualnej podmienia fileSystems, więc ten sam
+      # wpis montowania (z kopie.nix) podajemy mu jawnie
+      moje.nas.adres = "nas";
+      virtualisation.fileSystems = config.moje.nas.montowania;
+      # klucz trafia tam, gdzie na prawdziwym systemie (kopie.nix), przed odszyfrowaniem sekretów
+      system.activationScripts.kluczTestowy = lib.stringAfter [ "specialfs" ] ''
+        install -D -m 0400 ${./dane/klucz-testowy.txt} /var/lib/sops-nix/key.txt
+      '';
+      system.activationScripts.setupSecrets.deps = [ "kluczTestowy" ];
       services.snapper.configs = lib.mkForce { };
       services.smartd.enable = lib.mkForce false; # wirtualne dyski nie mają SMART
       networking.networkmanager.unmanaged = [ "eth1" ]; # adres nadaje framework testów
@@ -84,7 +128,7 @@ pkgs.testers.runNixOSTest {
           pc.succeed("test \"$(stat -c '%a %U %G' /srv/zeroroot-wymiana)\" = '2770 zeroroot zeroroot-wymiana'")
           pc.succeed("test \"$(stat -c '%a %U' /home/game_user)\" = '700 game_user'")
           pc.succeed("test \"$(readlink /home/Jacek/Projekty)\" = /home/wspolne/Projekty")
-          pc.succeed("test \"$(stat -c '%a %U' /mnt/games)\" = '750 game_user'")
+          pc.succeed("test \"$(stat -c '%a %U' /mnt/games)\" = '700 game_user'")
 
       with subtest("hidepid: game_user widzi tylko swoje procesy, Jacek wszystkie"):
           g = int(pc.succeed(jako("game_user", "ps -e --no-headers | wc -l")))
@@ -178,10 +222,12 @@ pkgs.testers.runNixOSTest {
           pc.wait_for_unit("opensnitchd.service")
           pc.sleep(3)
 
-      with subtest("OpenSnitch: ścieżki w regułach to prawdziwe pliki, nie dowiązania"):
-        out = pc.succeed("grep -ho '\"data\":\"/nix/store/[^\"]*' /var/lib/opensnitch/rules/*.json | cut -d'\"' -f4")
-        for sciezka in out.split():
-            pc.succeed(f"test -f {sciezka} && test ! -L {sciezka} && test \"$(readlink -f {sciezka})\" = {sciezka}")
+      with subtest("OpenSnitch: ścieżki w regułach to prawdziwe pliki – nie dowiązania ani opakowania"):
+          out = pc.succeed("grep -ho '\"data\":\"/nix/store/[^\"]*' /var/lib/opensnitch/rules/*.json | cut -d'\"' -f4")
+          for sciezka in out.split():
+              pc.succeed(f"test -f {sciezka} && test ! -L {sciezka} && test \"$(readlink -f {sciezka})\" = {sciezka}")
+              # opakowanie (wrapProgram/makeBinaryWrapper): prawdziwy proces to .NAZWA-wrapped
+              pc.succeed(f"test ! -e $(dirname {sciezka})/.$(basename {sciezka})-wrapped")
 
       with subtest("OpenSnitch: reguły załadowane, domyślnie odmowa, wyjątki działają"):
           out = pc.succeed("journalctl -u opensnitchd -b --no-pager")
@@ -204,6 +250,47 @@ pkgs.testers.runNixOSTest {
       with subtest("strażnik ma dostęp do demona Nix (vulnix), game_user nie"):
           pc.succeed(jako("straznik", "nix-store -qR /run/current-system > /dev/null"))
           pc.fail(jako("game_user", "nix-store -qR /run/current-system > /dev/null"))
+
+      with subtest("sekrety sops: odszyfrowane, tylko dla roota"):
+          pc.succeed("test \"$(cat /run/secrets/restic/haslo)\" = haslo-testowe-restic")
+          pc.succeed("grep -q username=modele /run/secrets/nas/modele")
+          pc.fail(jako("Jacek", "cat /run/secrets/restic/haslo"))
+          pc.fail(jako("claude", "cat /run/secrets/nas/modele"))
+
+      with subtest("restic: kopia na NAS przez rest-server (i przez OpenSnitch)"):
+          pc.succeed(jacek("echo wazne > ~/Documents/wazne.txt && mkdir -p ~/.cache/x && echo smiec > ~/.cache/x/s"))
+          pc.succeed("echo od-claude > /home/claude/pamiec.md && chown claude /home/claude/pamiec.md")
+          pc.succeed("systemctl start restic-backups-nas.service")
+          nas.succeed("test -n \"$(ls /var/lib/restic/pc/snapshots)\"")
+          lista = pc.succeed("restic-nas ls latest")
+          assert "/home/Jacek/Documents/wazne.txt" in lista, "brak pliku Jacka w kopii"
+          assert "/home/claude/pamiec.md" in lista, "brak pamięci claude w kopii"
+          assert "/home/Jacek/.cache/x/s" not in lista, "cache nie powinien być w kopii"
+
+      with subtest("NAS: udział Modele_3D montuje się na żądanie, pliki należą do Jacka"):
+          nas.wait_for_unit("samba-smbd.service")
+          nas.succeed("(echo haslo-testowe-smb; echo haslo-testowe-smb) | smbpasswd -s -a modele")
+          pc.succeed(jako("Jacek", "ls /mnt/nas/Modele_3D | grep -q kostka.stl"))
+          pc.succeed("test \"$(stat -c %U /mnt/nas/Modele_3D/kostka.stl)\" = Jacek")
+          pc.succeed(jako("Jacek", "echo nowy > /mnt/nas/Modele_3D/z-pc.stl"))
+          nas.succeed("grep -q nowy /srv/modele/z-pc.stl")
+          pc.fail(jako("game_user", "ls /mnt/nas/Modele_3D"))
+          pc.fail(jako("zeroroot", "ls /mnt/nas/Modele_3D"))
+          pc.fail(jako("claude", "cat /mnt/nas/Modele_3D/kostka.stl"))
+          pc.fail(jako("zeroroot", "ls /mnt/games"))
+          pc.fail(jako("claude", "ls /mnt/games"))
+
+      with subtest("ClamAV: plik z sygnaturą wykryty przy zapisie do Downloads i do wymiany zeroroot"):
+          pc.wait_for_unit("clamav-daemon.service")
+          pc.wait_for_unit("clamav-clamonacc.service")
+          pc.sleep(5)
+          pc.succeed(jacek("printf 'ZLOSLIWY-PLIK-TESTOWY-JUSTJACKPC\\n' > ~/Downloads/zly.txt && cat ~/Downloads/zly.txt > /dev/null"))
+          pc.wait_until_succeeds("journalctl -u clamav-clamonacc -u clamav-daemon | grep -q 'Test.JustJack.Zly'", timeout=60)
+          pc.succeed(jacek("printf 'ZLOSLIWY-PLIK-TESTOWY-JUSTJACKPC\\n' > /srv/zeroroot-wymiana/zly2.txt && cat /srv/zeroroot-wymiana/zly2.txt > /dev/null"))
+          pc.wait_until_succeeds("journalctl -u clamav-clamonacc -u clamav-daemon | grep 'Test.JustJack.Zly' | grep -q zly2", timeout=60)
+          pc.succeed(jacek("echo zwykly > ~/Downloads/ok.txt && cat ~/Downloads/ok.txt > /dev/null"))
+          pc.sleep(5)
+          pc.fail("journalctl -u clamav-clamonacc -u clamav-daemon | grep 'ok.txt' | grep -q FOUND")
 
       with subtest("hardening: sysctl, moduły, coredump"):
           for k, v in [("kernel.kptr_restrict", "2"), ("kernel.yama.ptrace_scope", "1"), ("kernel.kexec_load_disabled", "1"),
