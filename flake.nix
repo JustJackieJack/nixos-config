@@ -44,7 +44,11 @@
       };
 
       # nix flake check = pełna ewaluacja + budowa systemu.
-      checks.${system}.justjackpc = self.nixosConfigurations.justjackpc.config.system.build.toplevel;
+      checks.${system} = {
+        justjackpc = self.nixosConfigurations.justjackpc.config.system.build.toplevel;
+        # Test w maszynie wirtualnej (moduły na żywym systemie): nix build .#checks.x86_64-linux.vm -L
+        vm = import ./tests/vm.nix { inherit pkgs inputs; };
+      };
 
       formatter.${system} = pkgs.nixfmt-tree;
 

@@ -50,6 +50,7 @@ in
           "**/node_modules"
           "**/.direnv"
           "**/target"
+          "/home/wspolne/Udostepnione" # podmontowane pliki Jacka (są już w /home/Jacek)
         ];
         extraBackupArgs = [ "--exclude-caches" ];
         timerConfig = {

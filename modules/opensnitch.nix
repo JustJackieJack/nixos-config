@@ -4,7 +4,8 @@
 # bo timeout i domyślna akcja okna są w konfiguracji UI, nie demona – patrz README).
 #
 # Reguły używają DOKŁADNYCH ścieżek ze sklepu Nix (${pkgs.x}), więc po aktualizacji paczki
-# reguła zmienia się razem z nią – bez ponownego pytania.
+# reguła zmienia się razem z nią – bez ponownego pytania. Ścieżka musi być plikiem docelowym,
+# nie dowiązaniem (OpenSnitch porównuje prawdziwą ścieżkę procesu) – pilnuje tego tests/vm.nix.
 {
   config,
   lib,
@@ -53,6 +54,7 @@ let
     };
   };
   uid = u: toString config.users.users.${u}.uid;
+  nixCli = config.nix.package.nix-cli or config.nix.package;
 in
 lib.mkIf config.moje.opensnitch.enable {
   services.opensnitch = {
@@ -135,7 +137,9 @@ lib.mkIf config.moje.opensnitch.enable {
         zezwalajSciezke "101-timesyncd" "${config.systemd.package}/lib/systemd/systemd-timesyncd";
       "102-networkmanager" =
         zezwalajSciezke "102-networkmanager" "${config.networking.networkmanager.package}/bin/NetworkManager";
-      "103-nix-daemon" = zezwalajRootowi "103-nix-daemon" "${config.nix.package}/bin/nix";
+      # Nix ≥ 2.34: nix.package to opakowanie, a bin/nix w nim to dowiązanie do nix-cli. OpenSnitch
+      # widzi PRAWDZIWĄ ścieżkę procesu, więc wskazujemy nix-cli (wykrył to test w maszynie wirtualnej).
+      "103-nix-daemon" = zezwalajRootowi "103-nix-daemon" "${nixCli}/bin/nix";
       "104-freshclam" = zezwalajSciezke "104-freshclam" "${config.services.clamav.package}/bin/freshclam";
       "105-restic" = zezwalajRootowi "105-restic" "${pkgs.restic}/bin/restic";
       "106-cups-socket" =
@@ -144,7 +148,8 @@ lib.mkIf config.moje.opensnitch.enable {
         zezwalajSciezke "107-cups-ipp" "${config.services.printing.package}/lib/cups/backend/ipp";
 
       # avahi: wykrywanie drukarki (mDNS) – działa też przed zalogowaniem, gdy nie ma okna pytań.
-      "108-avahi" = zezwalajSciezke "108-avahi" "${config.services.avahi.package}/sbin/avahi-daemon";
+      # (sbin/avahi-daemon to dowiązanie do bin/ – reguła musi wskazywać plik docelowy)
+      "108-avahi" = zezwalajSciezke "108-avahi" "${config.services.avahi.package}/bin/avahi-daemon";
 
       # --- zadania strażnika (vulnix pobiera bazę CVE) ---
       "110-straznik" = {

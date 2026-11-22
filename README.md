@@ -28,7 +28,11 @@ secrets/                   sekrety sops (zaszyfrowane), patrz .sops.yaml
 | `pakiety.nix` | aplikacje wybrane przy migracji (lista `APLIKACJE.md` z folderu migracji) |
 | `awaryjny.nix` | pozycja „awaryjny” w menu rozruchu: bez hardeningu i bez OpenSnitch |
 
-Sprawdzenie bez instalowania: `nix flake check` (buduje cały system).
+Sprawdzenie bez instalowania:
+- `nix build .#checks.x86_64-linux.justjackpc` – buduje cały system,
+- `nix build .#checks.x86_64-linux.vm -L` – **test w maszynie wirtualnej** (`tests/vm.nix`): użytkownicy, hidepid,
+  polkit/machinectl (ego), sudo-rs, daj-claude, foldery wspólne, zapora, zeroroot bez sieci, reguły OpenSnitch,
+  hardening, strażnik. Wymaga KVM; trwa kilka minut.
 
 ---
 
@@ -99,7 +103,7 @@ Hasło (klucz awaryjny) zostaje jako zapas. **Nigdy nie resetuj FIDO2 na YubiKey
 | OpenSnitch + ProtonVPN | aplikacja to Python → zapyta raz, odpowiedz „always” | – |
 | OpenSnitch + Jacek | `nix flake update`, `restic` jako Jacek zapytają (reguły systemowe są tylko dla roota) – „always” | – |
 | zeroroot | `zeroroot-uruchom kitty` → okno gamescope; w środku `curl example.com` = błąd, `ls /run/user` = pusto, brak dźwięku | `journalctl -k \| grep zeroroot` |
-| daj-claude | `daj-claude ~/Documents/plik.txt` → `claude-sesja` widzi plik; po czasie nie | `zabierz-claude` |
+| daj-claude | `daj-claude ~/Documents/plik.txt` → claude widzi go w `/home/wspolne/Udostepnione/`; po czasie znika (sprawdzone w teście VM) | `zabierz-claude` |
 | Remmina → Win7 | `win7-rdp.sh` z `openssl-legacy.cnf` | `OPENSSL_CONF` w skrypcie |
 | Drukarka | System Settings → Printers → Add → `socket://192.168.50.157:9100`, sterownik gutenprint (DCP-T500W) lub „IPP Everywhere”, jeśli wykryje | – |
 | Prism (mody) | `build.sh` w modach: ścieżki `~/.var/app/org.prismlauncher…` → `~/.local/share/PrismLauncher` | – |
