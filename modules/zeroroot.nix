@@ -24,12 +24,21 @@ let
       nr="''${nr%%.*}"
       x="/tmp/.X11-unix/X$nr"
       [ -S "$x" ] || { echo "zeroroot: brak gniazda X gamescope ($x)" >&2; exit 1; }
+      # --dev daje minimalny /dev bez karty graficznej – podpinamy GPU (Intel/NVIDIA), inaczej
+      # gry i programy 3D działałyby tylko na procesorze albo wcale.
+      gpu=()
+      for d in /dev/dri /dev/nvidia*; do
+        [ -e "$d" ] && gpu+=(--dev-bind "$d" "$d")
+      done
       exec bwrap \
         --ro-bind / / \
         --dev /dev \
+        "''${gpu[@]}" \
         --proc /proc \
         --tmpfs /tmp \
         --ro-bind "$x" "$x" \
+        --perms 0700 --dir /tmp/run \
+        --setenv XDG_RUNTIME_DIR /tmp/run \
         --tmpfs /run/user \
         --bind /home/zeroroot /home/zeroroot \
         --bind ${wymiana} ${wymiana} \

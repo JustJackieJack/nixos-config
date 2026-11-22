@@ -5,6 +5,8 @@
 # Polecenia dla Jacka:
 #   claude-sesja [argumenty]     – uruchamia Claude Code jako claude w bieżącym katalogu
 #   daj-claude [-w] [-t 2h] ŚCIEŻKA…  – tymczasowy dostęp (ACL) do plików w /home/Jacek, sam wygasa
+#                                  (na katalogach nadrzędnych zostaje samo „przejście” x – bez listowania;
+#                                  zabierz-claude bez argumentów czyści wszystko)
 #   zabierz-claude [ŚCIEŻKA…]    – zabiera dostęp od razu (bez ścieżki: wszystko w /home/Jacek)
 #   pokaz-claude ŚCIEŻKA…        – kopia do /home/wspolne/Dla_Claude (claude widzi kopię, nie oryginał)
 #   Chromium (claude) w menu     – przeglądarka dla Claude in Chrome
