@@ -1,4 +1,4 @@
-# Aplikacje z listy APLIKACJE.md (wybór Jacka + zaakceptowane dopiski).
+# Aplikacje wybrane przy migracji z Fedory (lista ~/TMP/Migracja_NixOS/APLIKACJE.md, poza repo).
 # Część jest w innych modułach: Firefox, GnuPG (pulpit.nix), Steam/Heroic/Wine (gry.nix),
 # Claude Code/Chromium (claude.nix), ClamAV/Lynis/vulnix (monitoring.nix), sbctl (secure-boot.nix).
 { pkgs, ... }:

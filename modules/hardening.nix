@@ -59,7 +59,7 @@ in
         "kernel.unprivileged_bpf_disabled" = 1;
         "net.core.bpf_jit_harden" = 2;
         "kernel.sysrq" = 4; # tylko klawiatura (SAK), bez reszty SysRq
-        "kernel.perf_event_paranoid" = 3;
+        "kernel.perf_event_paranoid" = 3; # zwykłe jądro traktuje 3 jak 2 (najsurowsze) – zostawiamy
         "fs.suid_dumpable" = 0;
         "dev.tty.ldisc_autoload" = 0;
         "vm.unprivileged_userfaultfd" = 0;

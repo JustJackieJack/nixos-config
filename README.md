@@ -25,7 +25,7 @@ secrets/                   sekrety sops (zaszyfrowane), patrz .sops.yaml
 | `zeroroot.nix` | kwarantanna: bez sieci, gamescope + bubblewrap |
 | `monitoring.nix` | ClamAV, auditd, Lynis, `nix store verify`, vulnix, strażnik plików startowych i miejsca |
 | `kopie.nix` | snapper (/home), restic → NAS, udział Modele_3D (dwa ostatnie po dodaniu sekretów) |
-| `pakiety.nix` | aplikacje z `APLIKACJE.md` |
+| `pakiety.nix` | aplikacje wybrane przy migracji (lista `APLIKACJE.md` z folderu migracji) |
 | `awaryjny.nix` | pozycja „awaryjny” w menu rozruchu: bez hardeningu i bez OpenSnitch |
 
 Sprawdzenie bez instalowania: `nix flake check` (buduje cały system).
@@ -94,6 +94,7 @@ Hasło (klucz awaryjny) zostaje jako zapas. **Nigdy nie resetuj FIDO2 na YubiKey
 | hidepid | `ps aux` jako Jacek widzi wszystko; KDE, polkit (montowanie, sieć) działają | `moje.hardening.hidepid = false` |
 | ego / game_user | menu → „Steam (game_user)” startuje, jest dźwięk | `journalctl --user -b`, reguła polkit |
 | Steam: biblioteka | Steam → Storage → dodaj `/mnt/games/SteamLibrary` | właściciel `/mnt/games` = game_user |
+| Heroic: biblioteka | Settings → Default installation path: `/mnt/games/Heroic` (prefiksy Wine też tam) | jw. |
 | OpenSnitch | Firefox bez pytań; Steam pyta; okno pytań ustawić: **Default action: deny, Duration: once, timeout 30–60 s** (Ustawienia → UI) | tryb „awaryjny” w menu rozruchu |
 | OpenSnitch + ProtonVPN | aplikacja to Python → zapyta raz, odpowiedz „always” | – |
 | OpenSnitch + Jacek | `nix flake update`, `restic` jako Jacek zapytają (reguły systemowe są tylko dla roota) – „always” | – |
