@@ -1,7 +1,11 @@
 # Gry: Steam i Heroic działają jako game_user (ego), biblioteki na /mnt/games (Lexar).
 # programs.steam to NIE jest piaskownica – izolację daje osobne konto.
-{ lib, pkgs, ... }:
+{ lib, pkgs, inputs, ... }:
 let
+  # heroic ze stabilnego nixpkgs (26.05) miał błąd logowania do GOG (Cloudflare blokował
+  # niestandardowy User-Agent) – naprawione w 2.22.4, czego 26.05 jeszcze nie ma. Tylko ten
+  # jeden pakiet bierzemy z nixpkgs-unstable, reszta systemu zostaje na stabilnej gałęzi.
+  pkgsUnstable = import inputs.nixpkgs-unstable { inherit (pkgs) system; };
   # Zwykłe skróty Steama i Heroica uruchamiałyby je jako Jacek – chowamy je,
   # w menu zostają tylko wersje „(game_user)”.
   ukryjSkroty = lib.hiPrio (
@@ -40,7 +44,7 @@ in
 
   environment.systemPackages = with pkgs; [
     ego
-    heroic
+    pkgsUnstable.heroic
     prismlauncher # Minecraft – jako Jacek (buildy modów)
     wineWow64Packages.stable
     winetricks
