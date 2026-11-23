@@ -30,5 +30,5 @@
   # NIE zmieniać po instalacji (to nie jest wersja systemu, tylko punkt odniesienia dla danych stanowych).
   system.stateVersion = "26.05";
 
-  moje.secureBoot.enable = false;
+  moje.secureBoot.enable = true;
 }
