@@ -354,5 +354,83 @@ pkgs.testers.runNixOSTest {
           pc.succeed(f"test -e {s}")
           pc.fail(f"grep -q slab_nomerge {s}/kernel-params")
           pc.fail(f"test -e {s}/etc/systemd/system/opensnitchd.service")
+
+      with subtest("otwarte porty: nic nie nasłuchuje na zewnątrz poza mDNS/DHCP"):
+          pc.succeed("systemctl stop kdec inny lokalny || true")
+          tcp = pc.succeed("ss -Htln | awk '{print $4}' | grep -vE '^(127\\.|\\[::1\\]|::1)' || true").split()
+          print("TCP poza localhost:", tcp)
+          assert tcp == [], f"nasłuchujące porty TCP na zewnątrz: {tcp}"
+          udp = pc.succeed("ss -Huln | awk '{print $4}' | grep -vE '^(127\\.|\\[::1\\]|::1)' || true").split()
+          print("UDP poza localhost:", udp)
+          for adres in udp:
+              port = adres.rsplit(":", 1)[1]
+              assert port in ["5353", "68", "546", "323"], f"nieoczekiwany port UDP: {adres}"
+          # IPv6 z sieci: nic nie przechodzi (wyjątki zapory są tylko dla IPv4 z LAN)
+          pc.succeed("systemd-run --unit=v6test python3 -m http.server 1716 --bind ::")
+          pc.wait_for_open_port(1716)
+          nas.fail("curl -6 -sf -m 5 'http://[2001:db8:1::2]:1716' > /dev/null")
+          pc.succeed("systemctl stop v6test")
+
+      with subtest("kopia restic da się ODTWORZYĆ (plik identyczny z oryginałem)"):
+          pc.succeed("rm -rf /tmp/odtw && restic-nas restore latest --target /tmp/odtw --include /home/Jacek/Documents/wazne.txt")
+          pc.succeed("cmp /tmp/odtw/home/Jacek/Documents/wazne.txt /home/Jacek/Documents/wazne.txt")
+          pc.succeed("restic-nas check")
+
+      with subtest("sekrety nie leżą jawnym tekstem w /etc ani w konfiguracji systemu"):
+          pc.fail("grep -RIl --exclude-dir=static -e haslo-testowe-restic -e haslo-testowe-smb /etc 2>/dev/null | grep -v '^/etc/static' | head -1 | grep -q .")
+          pc.fail("grep -Il -e haslo-testowe-restic -e haslo-testowe-smb $(find -L /run/current-system/etc -maxdepth 3 -type f 2>/dev/null) 2>/dev/null | head -1 | grep -q .")
+          pc.succeed("test \"$(stat -c %a /run/secrets/restic/haslo)\" = 400")
+
+      with subtest("awaria OpenSnitch: systemd podnosi demona w kilka sekund"):
+          pc.succeed("systemctl kill -s KILL opensnitchd")
+          pc.sleep(1)
+          pc.wait_until_succeeds("systemctl is-active opensnitchd", timeout=15)
+          pc.sleep(3)
+          pc.fail(jako("Jacek", "curl -sf -m 8 http://nas > /dev/null"))  # znów kontrola
+
+      with subtest("próby eskalacji: claude, game_user, secure_user, zeroroot"):
+          for u in ["claude", "game_user", "secure_user", "zeroroot"]:
+              pc.fail(jako(u, "sudo -n true"))
+              pc.fail(jako(u, "cat /run/secrets/restic/haslo"))
+              pc.fail(jako(u, "ls /var/lib/sops-nix"))
+              pc.fail(jako(u, "machinectl shell --quiet --uid=Jacek .host /bin/true < /dev/null"))
+              pc.fail(jako(u, "machinectl shell --quiet --uid=root .host /bin/true < /dev/null"))
+              pc.fail(jako(u, "cat /home/Jacek/.config/gh/hosts.yml"))
+          # claude nie może podmienić źródeł paczek (nie jest trusted-user)
+          out = pc.execute(jako("claude", "nix --extra-experimental-features nix-command store info --option substituters http://nas 2>&1"))[1]
+          print("claude + substituters:", out[-300:])
+          assert "trusted" in out, "nix nie odrzucił źródła paczek od nie-zaufanego użytkownika"
+          # moduły jądra i kexec
+          pc.fail("modprobe dccp")
+          pc.succeed("test \"$(sysctl -n kernel.kexec_load_disabled)\" = 1")
+
+      with subtest("tryb awaryjny: przełączenie w działającym systemie i powrót"):
+          glowny = pc.succeed("readlink -f /run/current-system").strip()
+          pc.succeed("/run/current-system/specialisation/awaryjny/bin/switch-to-configuration test")
+          pc.fail("systemctl is-active opensnitchd")
+          pc.succeed(jako("Jacek", "sudo -n -u claude true"))  # sudo-rs i reguły działają też tu
+          pc.succeed("test \"$(systemctl --failed --no-legend --plain | wc -l)\" = 0")
+          pc.fail(jako("zeroroot", "curl -sf -m 5 http://nas > /dev/null"))  # zeroroot nadal bez sieci
+          pc.succeed(f"{glowny}/bin/switch-to-configuration test")
+          pc.wait_for_unit("opensnitchd.service")
+          pc.succeed("test \"$(systemctl --failed --no-legend --plain | wc -l)\" = 0")
+
+      with subtest("restart: wszystko wraca, tymczasowe udostępnienia dla claude znikają"):
+          pc.succeed(jacek("daj-claude -t 1h ~/Documents/t.txt"))
+          pc.succeed("test -n \"$(ls -A /home/wspolne/Udostepnione)\"")
+          pc.shutdown()
+          pc.start()
+          pc.wait_for_unit("multi-user.target")
+          pc.wait_for_unit("opensnitchd.service")
+          pc.wait_for_unit("user@1000.service")
+          pc.succeed("test \"$(systemctl --failed --no-legend --plain | wc -l)\" = 0")
+          pc.succeed("test -z \"$(ls -A /home/wspolne/Udostepnione)\"")
+          pc.fail(jako("claude", "cat /home/Jacek/Documents/t.txt"))
+          pc.succeed("test \"$(cat /run/secrets/restic/haslo)\" = haslo-testowe-restic")
+          pc.fail(jako("zeroroot", "curl -sf -m 5 http://nas > /dev/null"))
+          pc.sleep(3)
+          pc.fail(jako("Jacek", "curl -sf -m 8 http://nas > /dev/null"))
+          assert "nas-ok" in pc.succeed(jako("claude", "curl -sf -m 8 http://nas"))
+          pc.succeed("test \"$(stat -c '%a %U' /home/wspolne/Projekty)\" = '2770 Jacek'")
     '';
 }

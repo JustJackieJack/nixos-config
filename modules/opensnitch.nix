@@ -181,6 +181,10 @@ lib.mkIf config.moje.opensnitch.enable {
       };
   };
 
+  # Gdy demon padnie, kolejka nftables ma „bypass” – ruch przechodzi BEZ kontroli, dopóki demon
+  # nie wstanie. Upstream wznawia po 30 s; skracamy do 2 s (sprawdza tests/vm.nix).
+  systemd.services.opensnitchd.serviceConfig.RestartSec = lib.mkForce 2;
+
   # Okno OpenSnitch (pytania) – uruchamiane w sesji Jacka. Odbiera pytania o WSZYSTKICH
   # użytkowników (także game_user), więc grę zatwierdza się z pulpitu Jacka.
   environment.systemPackages = [ pkgs.opensnitch-ui ];

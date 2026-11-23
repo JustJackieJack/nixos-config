@@ -52,7 +52,7 @@ diskoLib.testLib.makeDiskoTest {
   # po formatowaniu, przed instalacją: klucz FIDO2 do LUKS (jak YubiKey po instalacji)
   postDisko = ''
     machine.succeed("systemd-cryptenroll --fido2-device=auto --fido2-with-client-pin=no --unlock-key-file=/tmp/secret.key /dev/disk/by-partlabel/disk-system-luks")
-    out = machine.succeed("cryptsetup luksDump /dev/disk/by-partlabel/disk-system-luks")
+    out = machine.succeed("${pkgs.cryptsetup}/bin/cryptsetup luksDump /dev/disk/by-partlabel/disk-system-luks")
     assert "systemd-fido2" in out, "brak tokenu FIDO2 w nagłówku LUKS"
   '';
 
@@ -60,12 +60,12 @@ diskoLib.testLib.makeDiskoTest {
     machine.wait_for_unit("multi-user.target")
 
     with subtest("LUKS2 odblokowany kluczem FIDO2 (bez hasła), z discard"):
-        out = machine.succeed("cryptsetup status cryptroot")
+        out = machine.succeed("${pkgs.cryptsetup}/bin/cryptsetup status cryptroot")
         print(out)
         assert "LUKS2" in out, out
         assert "discards" in out, "brak allowDiscards"
         machine.succeed("journalctl -b | grep -iE 'fido2|security token' | head -5 >&2 || true")
-        dump = machine.succeed("cryptsetup luksDump /dev/disk/by-partlabel/disk-system-luks")
+        dump = machine.succeed("${pkgs.cryptsetup}/bin/cryptsetup luksDump /dev/disk/by-partlabel/disk-system-luks")
         assert "argon2id" in dump, "LUKS bez argon2id"
 
     with subtest("podwoluminy btrfs i punkty montowania jak w disko.nix"):
