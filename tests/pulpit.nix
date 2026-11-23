@@ -42,7 +42,7 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         pkgs.pulseaudio # pactl – sprawdzenie dźwięku
         pkgs.wayland-utils # wayland-info
-        pkgs.xorg.xdpyinfo
+        pkgs.xdpyinfo
       ];
       virtualisation = {
         memorySize = 6144;

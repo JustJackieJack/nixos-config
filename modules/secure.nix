@@ -96,7 +96,14 @@ in
 {
   options.moje.secure.domeny = lib.mkOption {
     type = lib.types.listOf lib.types.str;
-    default = [
+    default = [ ];
+    description = "Domeny, z którymi secure_user łączy się bez pytania (z poddomenami). Inne = pytanie OpenSnitch.";
+  };
+
+  config = {
+    # Stała część listy jako DEFINICJA (nie wartość domyślna): wartość domyślna opcji nie łączy się
+    # z listą z hosta, tylko jest przez nią zastępowana – wtedy znikałyby gov.pl itd.
+    moje.secure.domeny = [
       # urzędy
       "gov.pl" # login.gov.pl, mObywatel, ePUAP, podatki.gov.pl (e-Urząd Skarbowy), pacjent.gov.pl…
       "zus.pl" # PUE/eZUS
@@ -105,12 +112,9 @@ in
       "mozilla.net"
       "mozilla.com"
       "safebrowsing.googleapis.com"
-      # TODO: domeny Twojego banku (np. "mbank.pl", "pkobp.pl", "ipko.pl") – dopisz w hosts/justjackpc
+      # domeny banku: hosts/justjackpc/default.nix
     ];
-    description = "Domeny, z którymi secure_user łączy się bez pytania (z poddomenami). Inne = pytanie OpenSnitch.";
-  };
 
-  config = {
     users.groups = {
       secure-dokumenty.gid = 2003; # Jacek + secure_user
       secure-fido.gid = 2004; # dostęp do kluczy FIDO2 (YubiKey) dla secure_user

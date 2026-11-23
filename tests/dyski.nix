@@ -104,7 +104,8 @@ diskoLib.testLib.makeDiskoTest {
         assert machine.succeed(f"cat /home/.snapshots/{nr}/snapshot/Jacek/notatka.txt").strip() == "wersja1"
         machine.fail(f"test -e /home/.snapshots/{nr}/snapshot/game_user/save.dat")
         machine.succeed("systemctl start snapper-timeline.service snapper-cleanup.service")
-        machine.succeed("snapper -c home list | grep -q timeline")
+        # systemctl start wraca, zanim usługa skończy – czekamy na migawkę „timeline”
+        machine.wait_until_succeeds("snapper -c home list | grep -q timeline", timeout=30)
 
     with subtest("scrub btrfs działa"):
         machine.succeed("btrfs scrub start -B /")

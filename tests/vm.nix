@@ -276,6 +276,8 @@ pkgs.testers.runNixOSTest {
           pc.fail(jako("secure_user", "curl -sf -m 8 http://obcy-serwer > /dev/null"))
           # reguła „Firefox zawsze” dotyczy tylko Jacka (inaczej omijałaby listę domen secure_user)
           pc.succeed("grep -q '\"data\":\"1000\"' /var/lib/opensnitch/rules/020-firefox.json")
+          # lista domen = stała część (urzędy) + dopisane w hoście/teście (nie zastępuje)
+          pc.succeed("grep -q 'gov\\\\\\\\.pl' /var/lib/opensnitch/rules/030-secure-domeny.json")
           # utwardzony profil Firefoksa: user.js stosowany przy starcie (Firefox zapisuje go do prefs.js)
           pc.execute(jako("secure_user", "timeout 180 firefox --headless --new-instance --profile /home/secure_user/profil-firefox --screenshot /tmp/ff.png about:blank"))
           prefs = pc.succeed("cat /home/secure_user/profil-firefox/prefs.js")
