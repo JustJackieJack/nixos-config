@@ -5,11 +5,11 @@
 #                 kopia prywatnego klucza: Bitwarden
 # Nowy plik:      sops secrets/justjackpc.yaml
 #
-# YubiKey #2 jeszcze nie skonfigurowany (dodać przez `sops updatekeys` gdy gotowy).
+# YubiKey #1 jeszcze nie skonfigurowany (dodać przez `sops updatekeys` gdy gotowy).
 keys:
-  - &admin_yubikey1 age1yubikey1qt5ze9xmgq2n597kf4f4g4ckfqwhpz63dt8274rl8n52uhyuan44wgk7t0g
+  - &admin_yubikey2 age1yubikey1qt5ze9xmgq2n597kf4f4g4ckfqwhpz63dt8274rl8n52uhyuan44wgk7t0g
   - &justjackpc age17qxlwu8x0pmra78p6syp04ekj3j6lmpyj76aklzg6ml3has2raasmeuhnt
 creation_rules:
   - path_regex: ^secrets/justjackpc\.yaml$
     key_groups:
-      - age: [*admin_yubikey1, *justjackpc]
+      - age: [*admin_yubikey2, *justjackpc]
