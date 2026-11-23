@@ -34,6 +34,9 @@ in
         };
       };
 
+      # katalog klucza sops tylko dla roota (mkdir -p dałby 0755 – inni widzieliby zawartość)
+      systemd.tmpfiles.rules = [ "d /var/lib/sops-nix 0700 root root -" ];
+
       services.restic.backups.nas = {
         repositoryFile = config.sops.secrets."restic/repo".path;
         passwordFile = config.sops.secrets."restic/haslo".path;

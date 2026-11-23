@@ -259,7 +259,9 @@ in
     chromiumClaude
   ];
 
-  systemd.tmpfiles.rules = [ "d ${udostepnione} 0750 root wspolne -" ];
+  # „D”: przy rozruchu zawartość jest usuwana – po restarcie montowania i tak znikają, a puste
+  # punkty montowania zdradzałyby claude nazwy dawniej udostępnionych plików (wykrył test VM)
+  systemd.tmpfiles.rules = [ "D ${udostepnione} 0750 root wspolne -" ];
 
   security.sudo-rs.extraRules = [
     # Jacek może uruchamiać polecenia jako claude bez hasła (i tylko jako claude).

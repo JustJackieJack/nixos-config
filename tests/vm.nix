@@ -82,7 +82,8 @@ pkgs.testers.runNixOSTest {
       virtualisation.fileSystems = config.moje.nas.montowania;
       # klucz trafia tam, gdzie na prawdziwym systemie (kopie.nix), przed odszyfrowaniem sekretów
       system.activationScripts.kluczTestowy = lib.stringAfter [ "specialfs" ] ''
-        install -D -m 0400 ${./dane/klucz-testowy.txt} /var/lib/sops-nix/key.txt
+        install -d -m 0700 /var/lib/sops-nix
+        install -m 0400 ${./dane/klucz-testowy.txt} /var/lib/sops-nix/key.txt
       '';
       system.activationScripts.setupSecrets.deps = [ "kluczTestowy" ];
       services.snapper.configs = lib.mkForce { };
@@ -393,6 +394,7 @@ pkgs.testers.runNixOSTest {
               pc.fail(jako(u, "sudo -n true"))
               pc.fail(jako(u, "cat /run/secrets/restic/haslo"))
               pc.fail(jako(u, "ls /var/lib/sops-nix"))
+              pc.fail(jako(u, "cat /var/lib/sops-nix/key.txt"))
               pc.fail(jako(u, "machinectl shell --quiet --uid=Jacek .host /bin/true < /dev/null"))
               pc.fail(jako(u, "machinectl shell --quiet --uid=root .host /bin/true < /dev/null"))
               pc.fail(jako(u, "cat /home/Jacek/.config/gh/hosts.yml"))

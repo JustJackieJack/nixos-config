@@ -83,7 +83,7 @@ Hasło (klucz awaryjny) zostaje jako zapas. **Nigdy nie resetuj FIDO2 na YubiKey
 6. Restart, `bootctl status` → `Secure Boot: enabled (user)`.
 
 ### Sekrety (sops) – włączają restic i udział NAS
-1. `sudo mkdir -p /var/lib/sops-nix && sudo nix shell nixpkgs#age -c age-keygen -o /var/lib/sops-nix/key.txt && sudo chmod 600 /var/lib/sops-nix/key.txt`
+1. `sudo install -d -m 0700 /var/lib/sops-nix && sudo nix shell nixpkgs#age -c age-keygen -o /var/lib/sops-nix/key.txt && sudo chmod 600 /var/lib/sops-nix/key.txt`
    → klucz publiczny do `.sops.yaml`, prywatny do Bitwardena.
 2. Klucze admina z YubiKeyów: `age-plugin-yubikey` (najpierw zmień domyślny PIN/PUK PIV).
 3. `nix develop` → `sops secrets/justjackpc.yaml`, wpisy: `restic/repo`, `restic/haslo`, `nas/modele`
