@@ -1,4 +1,4 @@
-# Testy – plan na kolejną sesję (stan z 2026-11-23, w nocy)
+# Testy – plan (aktualizacja 2026-11-23)
 
 Testy przerwane na prośbę Jacka. **Rano zaczynamy od testów.**
 
@@ -13,7 +13,17 @@ Ostatnie poprawki (NIE sprawdzone jeszcze testem – przerwane w trakcie):
   claude, game_user i zeroroot), `/mnt/games` 0700.
 - Reguła OpenSnitch `109-mount-cifs` (bez niej udział NAS się nie montował).
 
-## Kolejność na rano
+## Stan 2026-11-23
+- [x] `checks.vm` – PRZECHODZI w całości (NAS 0600/0700, mount.cifs, ClamAV, hardening, strażnik, Lynis, awaryjny).
+- [x] `checks.pulpit` – PRZECHODZI: Plasma Wayland, okno OpenSnitch połączone, strażnik w sesji, menu,
+      ego jako game_user (Wayland + dźwięk + okno Konsoli), piaskownica zeroroot (wszystkie zabezpieczenia).
+      Ograniczenie VM: gamescope nie ruszy na llvmpipe (brak VK_EXT_physical_device_drm) – sprawdzić na
+      prawdziwym sprzęcie: `zeroroot-uruchom kitty`.
+- [ ] `checks.dyski` – NIE URUCHOMIONY: wymaga pobrania paczek (QEMU z Canokey), a DNS 10.0.110.2 nie działał
+      („No route to host”; router 10.0.10.1 rozwiązuje). Uruchomić, gdy DNS wróci:
+      `nix build .#checks.x86_64-linux.dyski -L`
+
+## Kolejność (pierwotna)
 1. `nix build .#checks.x86_64-linux.vm -L` – dokończyć: NAS (uprawnienia), ClamAV (sygnatura testowa),
    hardening, strażnik, Lynis, tryb awaryjny.
 2. `nix build .#checks.x86_64-linux.pulpit -L` – pierwszy przebieg: Plasma (Wayland) z autologowaniem,
