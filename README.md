@@ -29,11 +29,11 @@ secrets/                   sekrety sops (zaszyfrowane), patrz .sops.yaml
 | `pakiety.nix` | aplikacje wybrane przy migracji (lista `APLIKACJE.md` z folderu migracji) |
 | `awaryjny.nix` | pozycja „awaryjny” w menu rozruchu: bez hardeningu i bez OpenSnitch |
 
-Sprawdzenie bez instalowania:
+Sprawdzenie bez instalowania (szczegóły i lista ręcznych testów: `TESTY_TODO.md`):
 - `nix build .#checks.x86_64-linux.justjackpc` – buduje cały system,
-- `nix build .#checks.x86_64-linux.vm -L` – **test w maszynie wirtualnej** (`tests/vm.nix`): użytkownicy, hidepid,
-  polkit/machinectl (ego), sudo-rs, daj-claude, foldery wspólne, zapora, zeroroot bez sieci, reguły OpenSnitch,
-  hardening, strażnik. Wymaga KVM; trwa kilka minut.
+- `nix build .#checks.x86_64-linux.vm -L` – test systemu w maszynie wirtualnej (28 grup),
+- `nix build .#checks.x86_64-linux.pulpit -L` – test pulpitu (Plasma, OpenSnitch, ego, zeroroot),
+- `nix build .#checks.x86_64-linux.dyski -L` – instalacja na układzie disko, LUKS2 + FIDO2, btrfs, snapper.
 
 ---
 

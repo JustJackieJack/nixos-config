@@ -1,39 +1,29 @@
-# Testy – plan (aktualizacja 2026-11-23)
+# Testy – stan (2026-11-23)
 
-Testy przerwane na prośbę Jacka. **Rano zaczynamy od testów.**
+Wszystkie trzy zestawy PRZECHODZĄ. Uruchamiać po każdej zmianie modułów (każdy ~10–15 min, po kolei):
 
-## Gdzie skończyliśmy
-`tests/vm.nix` (`nix build .#checks.x86_64-linux.vm -L`) – ostatni pełny przebieg doszedł do NAS.
-Przeszły: usługi, użytkownicy, hidepid, polkit/machinectl (ego), sudo-rs, foldery wspólne, daj-claude
-(z atakami na pomocnika root), zapora, zeroroot bez sieci (z OpenSnitch i bez), ścieżki reguł OpenSnitch,
-reguły OpenSnitch, strażnik → demon Nix, sekrety sops, kopia restic na NAS.
+| Zestaw | Polecenie | Co sprawdza |
+|---|---|---|
+| system | `nix build .#checks.x86_64-linux.vm -L` | 28 grup: usługi, użytkownicy, hidepid, polkit/ego, sudo-rs, foldery wspólne, daj-claude (z atakami), zapora (też IPv6), zeroroot bez sieci, OpenSnitch (ścieżki, reguły, awaria demona), secure_user, sops, restic (kopia + ODTWORZENIE), NAS, ClamAV, hardening, eskalacja, tryb awaryjny (przełączenie), restart |
+| pulpit | `nix build .#checks.x86_64-linux.pulpit -L` | Plasma Wayland, okno OpenSnitch, strażnik w sesji, menu, ego (okno + dźwięk jako game_user), piaskownica zeroroot |
+| dyski | `nix build .#checks.x86_64-linux.dyski -L` | disko (GPT, LUKS2, btrfs, ext4), instalacja, rozruch z odblokowaniem LUKS kluczem FIDO2 BEZ hasła, podwoluminy, wspólne wolne miejsce, snapper, scrub, wpis awaryjny |
 
-Ostatnie poprawki (NIE sprawdzone jeszcze testem – przerwane w trakcie):
-- NAS montowany `file_mode=0600,dir_mode=0700` (wcześniej 0660/0770 + grupa users = dostęp dla
-  claude, game_user i zeroroot), `/mnt/games` 0700.
-- Reguła OpenSnitch `109-mount-cifs` (bez niej udział NAS się nie montował).
+Gdy DNS w homelabie nie działa: dodać `--option substitute false` (o ile paczki są już lokalnie).
 
-## Stan 2026-11-23
-- [x] `checks.vm` – PRZECHODZI w całości (NAS 0600/0700, mount.cifs, ClamAV, hardening, strażnik, Lynis, awaryjny).
-- [x] `checks.pulpit` – PRZECHODZI: Plasma Wayland, okno OpenSnitch połączone, strażnik w sesji, menu,
-      ego jako game_user (Wayland + dźwięk + okno Konsoli), piaskownica zeroroot (wszystkie zabezpieczenia).
-      Ograniczenie VM: gamescope nie ruszy na llvmpipe (brak VK_EXT_physical_device_drm) – sprawdzić na
-      prawdziwym sprzęcie: `zeroroot-uruchom kitty`.
-- [ ] `checks.dyski` – NIE URUCHOMIONY: wymaga pobrania paczek (QEMU z Canokey), a DNS 10.0.110.2 nie działał
-      („No route to host”; router 10.0.10.1 rozwiązuje). Uruchomić, gdy DNS wróci:
-      `nix build .#checks.x86_64-linux.dyski -L`
+## Nie da się sprawdzić w maszynie wirtualnej (ręcznie po instalacji)
+- NVIDIA (sterownik, Wayland), Secure Boot (lanzaboote + klucze w BIOS-ie),
+- prawdziwy YubiKey z PIN-em (test używa wirtualnego Canokey bez PIN-u),
+- gamescope (wymaga prawdziwej karty – w VM brak VK_EXT_physical_device_drm): `zeroroot-uruchom kitty`,
+- Steam/Heroic z gier (pobieranie), okno hasła przy „Bank i urzędy (secure_user)”,
+- vulnix (pobiera bazę CVE z internetu), drukarka.
 
-## Kolejność (pierwotna)
-1. `nix build .#checks.x86_64-linux.vm -L` – dokończyć: NAS (uprawnienia), ClamAV (sygnatura testowa),
-   hardening, strażnik, Lynis, tryb awaryjny.
-2. `nix build .#checks.x86_64-linux.pulpit -L` – pierwszy przebieg: Plasma (Wayland) z autologowaniem,
-   okno OpenSnitch, ego (konsole + dźwięk jako game_user), zeroroot-uruchom (ego → gamescope → bwrap).
-   Możliwe problemy środowiska: KWin/gamescope na programowej grafice w maszynie wirtualnej.
-3. `nix build .#checks.x86_64-linux.dyski -L` – pierwszy przebieg: disko (GPT, LUKS2, btrfs, ext4),
-   klucz FIDO2 (Canokey) w LUKS i rozruch BEZ hasła, podwoluminy, wspólne wolne miejsce, snapper, scrub.
-4. Usunąć ten plik, zaktualizować README (tabela „do przetestowania”: co już sprawdzone testami).
-
-## Błędy znalezione dzięki testom (wszystkie poprawione w kodzie)
-daj-claude odsłaniał pliki 644 w domu; reguły OpenSnitch: nix (dowiązanie), avahi (dowiązanie),
-restic (opakowanie .restic-wrapped), brak mount.cifs; NAS i /mnt/games otwarte dla grupy users;
-wygasanie dostępu do 1 min za późno.
+## Błędy znalezione dzięki testom (wszystkie poprawione)
+1. daj-claude odsłaniał claude pliki 644 w domu Jacka (np. token gh) → bind mount, dom zawsze 700.
+2. OpenSnitch: reguła nix (dowiązanie), avahi (dowiązanie), restic (opakowanie) – nigdy by nie pasowały.
+3. OpenSnitch: brak reguły mount.cifs – udział NAS nie montowałby się.
+4. NAS i /mnt/games otwarte dla grupy users (= wszystkie konta, w tym zeroroot).
+5. Wygasanie dostępu claude do minuty za późno (AccuracySec).
+6. Reguła „Firefox zawsze” omijałaby listę domen secure_user.
+7. OpenSnitch po awarii wstawał po 30 s (ruch bez kontroli) → 2 s.
+8. /var/lib/sops-nix z prawami 0755 → 0700.
+9. Puste punkty montowania po restarcie zdradzały nazwy udostępnionych plików → czyszczenie przy rozruchu.
