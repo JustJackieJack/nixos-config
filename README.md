@@ -23,6 +23,7 @@ secrets/                   sekrety sops (zaszyfrowane), patrz .sops.yaml
 | `claude.nix` | Claude Code jako `claude`, `daj-claude` / `zabierz-claude` / `pokaz-claude`, Chromium (claude) |
 | `gry.nix` | Steam, Heroic (jako game_user), Proton-GE, gamescope, GameMode, Prism, Wine |
 | `zeroroot.nix` | kwarantanna: bez sieci, gamescope + bubblewrap |
+| `secure.nix` | `secure_user`: utwardzony Firefox do banku i urzędów, start przez ego **z hasłem**, lista domen w OpenSnitch, YubiKey (FIDO2), dokumenty w `/home/secure-dokumenty` |
 | `monitoring.nix` | ClamAV, auditd, Lynis, `nix store verify`, vulnix, strażnik plików startowych i miejsca |
 | `kopie.nix` | snapper (/home), restic → NAS, udział Modele_3D (dwa ostatnie po dodaniu sekretów) |
 | `pakiety.nix` | aplikacje wybrane przy migracji (lista `APLIKACJE.md` z folderu migracji) |
@@ -106,6 +107,7 @@ Hasło (klucz awaryjny) zostaje jako zapas. **Nigdy nie resetuj FIDO2 na YubiKey
 | daj-claude | `daj-claude ~/Documents/plik.txt` → claude widzi go w `/home/wspolne/Udostepnione/`; po czasie znika (sprawdzone w teście VM) | `zabierz-claude` |
 | Remmina → Win7 | `win7-rdp.sh` z `openssl-legacy.cnf` | `OPENSSL_CONF` w skrypcie |
 | Drukarka | System Settings → Printers → Add → `socket://192.168.50.157:9100`, sterownik gutenprint (DCP-T500W) lub „IPP Everywhere”, jeśli wykryje | – |
+| Bank i urzędy | menu → „Bank i urzędy (secure_user)” → okienko hasła → Firefox. Dopisz domeny banku w `moje.secure.domeny` (host), inne strony OpenSnitch zgłosi pytaniem. YubiKey jako klucz logowania w banku/login.gov.pl | `journalctl --user -b`, reguła polkit |
 | Prism (mody) | `build.sh` w modach: ścieżki `~/.var/app/org.prismlauncher…` → `~/.local/share/PrismLauncher` | – |
 
 ## SSH (zamiast SSH Pilot)

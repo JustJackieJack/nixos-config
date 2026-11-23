@@ -13,6 +13,7 @@
     ./claude.nix
     ./gry.nix
     ./zeroroot.nix
+    ./secure.nix
     ./monitoring.nix
     ./kopie.nix
     ./pakiety.nix

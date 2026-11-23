@@ -42,6 +42,7 @@ in
           "/home/Jacek"
           "/home/claude" # cała pamięć i ustawienia Claude
           "/home/wspolne"
+          "/home/secure-dokumenty" # wyciągi i dokumenty z banku/urzędów (reszta secure_user – nie)
         ];
         exclude = [
           "/home/*/.cache"

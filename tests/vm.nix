@@ -77,6 +77,8 @@ pkgs.testers.runNixOSTest {
       # NAS w sieci testowej; moduł maszyny wirtualnej podmienia fileSystems, więc ten sam
       # wpis montowania (z kopie.nix) podajemy mu jawnie
       moje.nas.adres = "nas";
+      moje.secure.domeny = [ "nas" ]; # domena „dozwolona” w sieci testowej
+      networking.extraHosts = "192.168.1.1 obcy-serwer"; # nazwa spoza listy domen secure_user
       virtualisation.fileSystems = config.moje.nas.montowania;
       # klucz trafia tam, gdzie na prawdziwym systemie (kopie.nix), przed odszyfrowaniem sekretów
       system.activationScripts.kluczTestowy = lib.stringAfter [ "specialfs" ] ''
@@ -251,6 +253,39 @@ pkgs.testers.runNixOSTest {
           pc.succeed(jako("straznik", "nix-store -qR /run/current-system > /dev/null"))
           pc.fail(jako("game_user", "nix-store -qR /run/current-system > /dev/null"))
 
+      with subtest("secure_user: osobne konto, start tylko z hasłem, lista domen, utwardzony Firefox"):
+          pc.succeed("test \"$(id -u secure_user)\" = 1004")
+          pc.succeed("test \"$(stat -c '%a %U' /home/secure_user)\" = '700 secure_user'")
+          pc.fail(jako("Jacek", "ls /home/secure_user"))
+          pc.fail(jako("secure_user", "ls /home/Jacek"))
+          pc.fail(jako("secure_user", "ls /home/wspolne"))
+          for u in ["claude", "game_user", "zeroroot"]:
+              pc.fail(jako(u, "ls /home/secure-dokumenty"))
+              pc.fail(jako(u, "ls /home/secure_user"))
+          # dokumenty: secure_user zapisuje, Jacek czyta (także przez skrót w domu)
+          pc.succeed(jako("secure_user", "echo wyciag > /home/secure-dokumenty/wyciag.pdf"))
+          pc.succeed(jako("Jacek", "grep -q wyciag /home/Jacek/Dokumenty_bank/wyciag.pdf"))
+          # ego/machinectl do secure_user wymaga hasła – bez potwierdzenia (brak agenta) odmowa
+          pc.fail(jako("Jacek", "machinectl shell --quiet --uid=secure_user .host /bin/true < /dev/null"))
+          pc.fail(jako("game_user", "machinectl shell --quiet --uid=secure_user .host /bin/true < /dev/null"))
+          # OpenSnitch: domena z listy (w teście „nas”) bez pytania, adres spoza listy – odmowa
+          pc.succeed(jako("secure_user", "curl -sf -m 8 http://nas > /dev/null"))
+          # „obcy-serwer” to ten sam adres co nas, ale nazwa spoza listy (jak fałszywa strona banku).
+          # OpenSnitch ocenia NAZWĘ, przez którą program dostał adres – musi być odmowa.
+          pc.fail(jako("secure_user", "curl -sf -m 8 http://obcy-serwer > /dev/null"))
+          # reguła „Firefox zawsze” dotyczy tylko Jacka (inaczej omijałaby listę domen secure_user)
+          pc.succeed("grep -q '\"data\":\"1000\"' /var/lib/opensnitch/rules/020-firefox.json")
+          # utwardzony profil Firefoksa: user.js stosowany przy starcie (Firefox zapisuje go do prefs.js)
+          pc.execute(jako("secure_user", "timeout 180 firefox --headless --new-instance --profile /home/secure_user/profil-firefox --screenshot /tmp/ff.png about:blank"))
+          prefs = pc.succeed("cat /home/secure_user/profil-firefox/prefs.js")
+          for wpis in ['"dom.security.https_only_mode", true', '"signon.rememberSignons", false',
+                       '"network.IDN_show_punycode", true', '"xpinstall.enabled", false',
+                       '"media.peerconnection.enabled", false', '"browser.contentblocking.category", "strict"']:
+              assert wpis in prefs, f"brak w prefs.js: {wpis}"
+          # YubiKey (FIDO2) dla secure_user i skrót w menu
+          pc.succeed("grep -rq 'ID_FIDO_TOKEN.*secure-fido' /etc/udev/rules.d/")
+          pc.succeed("grep -q 'ego --machinectl --user=secure_user firefox' /run/current-system/sw/share/applications/secure-user-firefox.desktop")
+
       with subtest("sekrety sops: odszyfrowane, tylko dla roota"):
           pc.succeed("test \"$(cat /run/secrets/restic/haslo)\" = haslo-testowe-restic")
           pc.succeed("grep -q username=modele /run/secrets/nas/modele")
@@ -266,6 +301,8 @@ pkgs.testers.runNixOSTest {
           assert "/home/Jacek/Documents/wazne.txt" in lista, "brak pliku Jacka w kopii"
           assert "/home/claude/pamiec.md" in lista, "brak pamięci claude w kopii"
           assert "/home/Jacek/.cache/x/s" not in lista, "cache nie powinien być w kopii"
+          assert "/home/secure-dokumenty/wyciag.pdf" in lista, "brak dokumentów z banku w kopii"
+          assert "/home/secure_user/" not in lista, "profil przeglądarki bankowej nie powinien trafiać do kopii"
 
       with subtest("NAS: udział Modele_3D montuje się na żądanie, pliki należą do Jacka"):
           nas.wait_for_unit("samba-smbd.service")

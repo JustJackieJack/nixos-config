@@ -28,7 +28,7 @@ let
   };
   # To samo, ale tylko gdy program działa jako root (demon). Dla narzędzi, które może uruchomić
   # każdy (nix, restic): inaczej np. game_user mógłby użyć „nix” do pobrania czegokolwiek bez pytania.
-  zezwalajRootowi = nazwa: sciezka: {
+  zezwalajDlaUid = nazwa: sciezka: uidStr: {
     name = nazwa;
     enabled = true;
     action = "allow";
@@ -49,11 +49,12 @@ let
           type = "simple";
           operand = "user.id";
           sensitive = false;
-          data = "0";
+          data = uidStr;
         }
       ];
     };
   };
+  zezwalajRootowi = nazwa: sciezka: zezwalajDlaUid nazwa sciezka "0";
   uid = u: toString config.users.users.${u}.uid;
   nixCli = config.nix.package.nix-cli or config.nix.package;
 in
@@ -135,7 +136,11 @@ lib.mkIf config.moje.opensnitch.enable {
         };
 
         # --- przeglądarka główna ---
-        "020-firefox" = zezwalajSciezke "020-firefox" "${pkgs.firefox-unwrapped}/lib/firefox/firefox";
+        # tylko Firefox JACKA (UID 1000): Firefox na koncie secure_user ma własną listę domen
+        # (secure.nix), a reguła „zawsze” dla samej ścieżki by ją omijała
+        "020-firefox" = zezwalajDlaUid "020-firefox" "${pkgs.firefox-unwrapped}/lib/firefox/firefox" (
+          uid "Jacek"
+        );
 
         # --- usługi systemowe ---
         "100-resolved" =
