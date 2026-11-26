@@ -1,4 +1,5 @@
-# A permanent, read/write view for Jacek into a fixed set of the claude account's config files.
+# A permanent view for Jacek into a fixed set of the claude account's config files (read/write
+# for most, read-only for CLAUDE.md - see the `items` list below for why).
 # Convenience only - Jacek already has full root access via sudo (security.sudo-rs.extraRules
 # in default.nix), so this adds no new security boundary, just a nice stable folder instead of
 # `claude-home`/`sudo -u claude`.
@@ -17,41 +18,57 @@ let
   # `name` is the subpath under both the real claude location and $targetDir.
   # `kind`: "dir" shares the whole directory (new files inside appear immediately - it's a
   # live view, not a snapshot); "file" shares exactly that one file.
-  # CLAUDE.md is deliberately NOT in this list: instructions.nix's activation script rewrites
-  # it from the repo's modules/users/claude/CLAUDE.md on every boot (not just every rebuild -
-  # activation scripts re-run on every boot), by design, so it never drifts from what the repo
-  # declares. Editing it through a persistent mount here would silently lose the edit at the
-  # next reboot. To change it, edit modules/users/claude/CLAUDE.md in the repo and rebuild.
+  # `access`: "rw" (default for everything except CLAUDE.md) or "ro".
+  #
+  # CLAUDE.md is "ro", not left out entirely: instructions.nix's activation script rewrites it
+  # from the repo's modules/users/claude/CLAUDE.md on every boot (not just every rebuild -
+  # activation scripts re-run on every boot too), by design, so it never drifts from what the
+  # repo declares. That only breaks WRITES through this mount (an edit here would silently be
+  # lost at the next reboot) - reads are always fine, since you'd just see whatever the current
+  # boot's freshly-regenerated content is anyway. To change the content, edit
+  # modules/users/claude/CLAUDE.md in the repo and rebuild.
   items = [
+    {
+      name = "CLAUDE.md";
+      source = "/home/claude/.claude/CLAUDE.md";
+      kind = "file";
+      access = "ro";
+    }
     {
       name = "ssh";
       source = "/home/claude/.ssh";
       kind = "dir";
+      access = "rw";
     }
     {
       name = "skills";
       source = "/home/claude/.claude/skills";
       kind = "dir";
+      access = "rw";
     }
     {
       name = "claude.json";
       source = "/home/claude/.claude.json";
       kind = "file";
+      access = "rw";
     }
     {
       name = "rules";
       source = "/home/claude/.claude/rules";
       kind = "dir";
+      access = "rw";
     }
     {
       name = "agents";
       source = "/home/claude/.claude/agents";
       kind = "dir";
+      access = "rw";
     }
     {
       name = "commands";
       source = "/home/claude/.claude/commands";
       kind = "dir";
+      access = "rw";
     }
   ];
 
@@ -71,7 +88,8 @@ let
           "bind"
           "nofail"
           "x-systemd.mkdir"
-        ];
+        ]
+        ++ lib.optional (item.access == "ro") "ro";
       };
     }) items
   );
@@ -134,18 +152,21 @@ in
       ];
       text = lib.concatMapStringsSep "\n" (
         item:
+        let
+          aclMode = if item.access == "ro" then "rX" else "rwX";
+        in
         if item.kind == "dir" then
           ''
             install -d -m 0755 -o claude -g users -- "${item.source}" \
               || { echo "jacekClaudeAccess: install -d failed for ${item.source}" >&2; exit 1; }
-            ${pkgs.acl}/bin/setfacl -R -m "u:Jacek:rwX" -- "${item.source}" \
+            ${pkgs.acl}/bin/setfacl -R -m "u:Jacek:${aclMode}" -- "${item.source}" \
               || { echo "jacekClaudeAccess: setfacl failed for ${item.source}" >&2; exit 1; }
-            ${pkgs.acl}/bin/setfacl -d -m "u:Jacek:rwX" -- "${item.source}" \
+            ${pkgs.acl}/bin/setfacl -d -m "u:Jacek:${aclMode}" -- "${item.source}" \
               || { echo "jacekClaudeAccess: default setfacl failed for ${item.source}" >&2; exit 1; }
           ''
         else
           ''
-            ${pkgs.acl}/bin/setfacl -m "u:Jacek:rwX" -- "${item.source}" \
+            ${pkgs.acl}/bin/setfacl -m "u:Jacek:${aclMode}" -- "${item.source}" \
               || { echo "jacekClaudeAccess: setfacl failed for ${item.source}" >&2; exit 1; }
           ''
       ) items;

@@ -221,10 +221,13 @@ pkgs.testers.runNixOSTest {
               pc.fail(f"command -v {old}")
 
       with subtest("ClaudeFiles: trwały, zapisywalny widok plików claude dla Jacka"):
-          for nazwa in ["ssh", "skills", "claude.json", "rules", "agents", "commands"]:
+          for nazwa in ["ssh", "CLAUDE.md", "skills", "claude.json", "rules", "agents", "commands"]:
               pc.succeed(f"findmnt /home/wspolne/ClaudeFiles/{nazwa}")
-          # CLAUDE.md NIE jest tu udostępniane - instructions.nix nadpisuje je co restart,
-          # zob. komentarz w admin-access.nix. Zamiast niego test na pliku .ssh/config.
+          # CLAUDE.md jest tylko do odczytu - instructions.nix nadpisuje je co restart (zob.
+          # komentarz w admin-access.nix), więc zapis przez ten mount musi się nie udać.
+          out = pc.succeed(jacek("cat ~/Claude/CLAUDE.md"))
+          assert "claude" in out.lower()
+          pc.fail(jacek("echo x >> ~/Claude/CLAUDE.md"))
           pc.succeed(jako("claude", "echo 'Host test' > ~/.ssh/config"))
           # Jacek czyta, bez sudo
           out = pc.succeed(jacek("cat ~/Claude/ssh/config"))
