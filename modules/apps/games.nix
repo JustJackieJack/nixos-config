@@ -56,7 +56,10 @@ in
     mangohud
     ukryjSkroty
     (jakoGameUser "Steam" "steam" "steam")
-    (jakoGameUser "Heroic" "heroic" "com.heroicgameslauncher.hgl")
+    # --ozone-platform=x11: Heroic (Electron) zawieszało samo okno (nie cały pulpit) losowo na
+    # NVIDIA + natywny Wayland Ozone - znany problem stabilności Electrona na Wayland/NVIDIA.
+    # Wymuszenie XWayland naprawia to bez utraty funkcji.
+    (jakoGameUser "Heroic" "heroic --ozone-platform=x11" "com.heroicgameslauncher.hgl")
   ];
 
   systemd.tmpfiles.rules = [

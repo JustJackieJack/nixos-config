@@ -53,6 +53,15 @@ let
       access = "rw";
     }
     {
+      # Claude Code's own permission allow/deny lists for this account (Bash command patterns
+      # etc.) - not created by any other script here, unlike CLAUDE.md/claude.json, so the
+      # activation script below creates it (as empty JSON) the first time it's missing.
+      name = "settings.json";
+      source = "/home/claude/.claude/settings.json";
+      kind = "file";
+      access = "rw";
+    }
+    {
       name = "rules";
       source = "/home/claude/.claude/rules";
       kind = "dir";
@@ -166,6 +175,16 @@ in
           ''
         else
           ''
+            if [ ! -f "${item.source}" ]; then
+              install -d -m 0755 -o claude -g users -- "$(dirname -- "${item.source}")" \
+                || { echo "jacekClaudeAccess: install -d (parent) failed for ${item.source}" >&2; exit 1; }
+              echo '{}' > "${item.source}" \
+                || { echo "jacekClaudeAccess: create failed for ${item.source}" >&2; exit 1; }
+              chown claude -- "${item.source}" \
+                || { echo "jacekClaudeAccess: chown failed for ${item.source}" >&2; exit 1; }
+              chmod 0644 -- "${item.source}" \
+                || { echo "jacekClaudeAccess: chmod failed for ${item.source}" >&2; exit 1; }
+            fi
             ${pkgs.acl}/bin/setfacl -m "u:Jacek:${aclMode}" -- "${item.source}" \
               || { echo "jacekClaudeAccess: setfacl failed for ${item.source}" >&2; exit 1; }
           ''
