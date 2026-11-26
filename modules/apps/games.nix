@@ -23,12 +23,16 @@ let
     ''
   );
 
+  # trybEgo: "--machinectl" (domyślnie, z xdg-desktop-portal) albo "--machinectl-bare" (bez
+  # portalu - patrz Heroic niżej: z portalem powiadomienia D-Bus (libnotify) nie miały komu
+  # odpowiedzieć i blokowały UI na ~25s przy każdej próbie pokazania powiadomienia, co wyglądało
+  # jak losowe zawieszenia bez restartu aplikacji. Bez portalu wołanie dostaje błąd od razu.
   jakoGameUser =
-    nazwa: polecenie: ikona:
+    nazwa: polecenie: ikona: trybEgo:
     pkgs.makeDesktopItem {
       name = "${nazwa}-game-user";
       desktopName = "${nazwa} (game_user)";
-      exec = "${pkgs.ego}/bin/ego --machinectl --user=game_user ${polecenie}";
+      exec = "${pkgs.ego}/bin/ego ${trybEgo} --user=game_user ${polecenie}";
       icon = ikona;
       categories = [ "Game" ];
     };
@@ -55,11 +59,13 @@ in
     winetricks
     mangohud
     ukryjSkroty
-    (jakoGameUser "Steam" "steam" "steam")
+    (jakoGameUser "Steam" "steam" "steam" "--machinectl")
     # --ozone-platform=x11: Heroic (Electron) zawieszało samo okno (nie cały pulpit) losowo na
     # NVIDIA + natywny Wayland Ozone - znany problem stabilności Electrona na Wayland/NVIDIA.
     # Wymuszenie XWayland naprawia to bez utraty funkcji.
-    (jakoGameUser "Heroic" "heroic --ozone-platform=x11" "com.heroicgameslauncher.hgl")
+    # --machinectl-bare: zob. komentarz przy jakoGameUser - bez xdg-desktop-portal, żeby
+    # wywołania powiadomień (libnotify) nie czekały na timeout D-Bus.
+    (jakoGameUser "Heroic" "heroic --ozone-platform=x11" "com.heroicgameslauncher.hgl" "--machinectl-bare")
   ];
 
   systemd.tmpfiles.rules = [
