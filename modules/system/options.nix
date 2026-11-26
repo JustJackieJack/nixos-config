@@ -44,7 +44,7 @@
       type = lib.types.attrsOf lib.types.anything;
       default = { };
       internal = true;
-      description = "Wpisy montowania udziałów NAS (wyliczane w kopie.nix; test VM używa ich ponownie).";
+      description = "Wpisy montowania udziałów NAS (wyliczane w backups.nix; test VM używa ich ponownie).";
     };
 
     sekrety.plik = lib.mkOption {

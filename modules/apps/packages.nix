@@ -1,5 +1,5 @@
 # Aplikacje wybrane przy migracji z Fedory (lista ~/TMP/Migracja_NixOS/APLIKACJE.md, poza repo).
-# Część jest w innych modułach: Firefox, GnuPG (pulpit.nix), Steam/Heroic/Wine (gry.nix),
+# Część jest w innych modułach: Firefox, GnuPG (desktop.nix), Steam/Heroic/Wine (games.nix),
 # Claude Code/Chromium (claude.nix), ClamAV/Lynis/vulnix (monitoring.nix), sbctl (secure-boot.nix).
 { pkgs, ... }:
 {
@@ -13,7 +13,7 @@
     nix-direnv.enable = true;
   };
   programs.partition-manager.enable = true;
-  programs.kdeconnect.enable = false; # moduł otwiera porty dla wszystkich – paczka niżej, porty w siec.nix
+  programs.kdeconnect.enable = false; # moduł otwiera porty dla wszystkich – paczka niżej, porty w network.nix
   programs.git.enable = true;
   programs.tmux.enable = true;
 

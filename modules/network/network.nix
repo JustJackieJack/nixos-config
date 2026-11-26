@@ -1,5 +1,5 @@
 # Sieć: NetworkManager, systemd-resolved, nftables (domyślnie odrzucaj przychodzące), avahi.
-# ProtonVPN: aplikacja w pakiety.nix (korzysta z NetworkManagera).
+# ProtonVPN: aplikacja w packages.nix (korzysta z NetworkManagera).
 { config, ... }:
 let
   lan = config.moje.lan;

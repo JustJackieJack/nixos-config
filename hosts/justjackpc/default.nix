@@ -13,7 +13,7 @@
   # Ta sama nazwa co na Fedorze; router przydziela 10.0.10.248 po MAC (eno1, 30:9C:23:9C:D6:BB).
   networking.hostName = "JustJackPC";
 
-  # Sieć domowa, z której wolno KDE Connect i mDNS (modules/siec.nix).
+  # Sieć domowa, z której wolno KDE Connect i mDNS (modules/network/network.nix).
   moje.lan = "10.0.10.0/24";
 
   # Bank (przeglądarka secure_user): ING Bank Śląski – www.ing.pl i logowanie login.ingbank.pl.

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(nix build *)",
+      "Bash(git -c safe.directory='*' log*)",
+      "Bash(git -c safe.directory='*' status*)",
+      "Bash(journalctl *)",
+      "Bash(ps *)",
+      "Bash(systemctl status*)",
+      "Bash(systemctl list-units*)",
+      "Bash(machinectl list*)"
+    ]
+  }
+}

@@ -1,3 +1,6 @@
 /result
 /.direnv
 *.kate-swp
+__pycache__/
+*.pyc
+.claude/settings.local.json

@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
-    # Tylko dla pojedynczych pakietów, którym stabilna gałąź nie wystarcza (np. heroic w gry.nix:
+    # Tylko dla pojedynczych pakietów, którym stabilna gałąź nie wystarcza (np. heroic w apps/games.nix:
     # poprawka logowania GOG przez Cloudflare). Resztę systemu trzyma stabilne nixpkgs powyżej.
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 

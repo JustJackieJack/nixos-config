@@ -1,6 +1,11 @@
 # Gry: Steam i Heroic działają jako game_user (ego), biblioteki na /mnt/games (Lexar).
 # programs.steam to NIE jest piaskownica – izolację daje osobne konto.
-{ lib, pkgs, inputs, ... }:
+{
+  lib,
+  pkgs,
+  inputs,
+  ...
+}:
 let
   # heroic ze stabilnego nixpkgs (26.05) miał błąd logowania do GOG (Cloudflare blokował
   # niestandardowy User-Agent) – naprawione w 2.22.4, czego 26.05 jeszcze nie ma. Tylko ten

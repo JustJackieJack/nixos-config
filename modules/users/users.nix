@@ -1,6 +1,6 @@
 # Użytkownicy:
 #   Jacek     (1000) – główny, wheel
-#   claude    (1001) – asystent; dostęp tylko do /home/wspolne + to, co Jacek da (daj-claude)
+#   claude    (1001) – asystent; dostęp tylko do /home/wspolne + to, co Jacek da (claude-view/-edit/-copy)
 #   game_user (1002) – Steam/Heroic; gry na /mnt/games
 #   zeroroot  (1003) – podejrzane programy; bez sieci, w gamescope + bubblewrap
 # Hasło Jacka ustawia się przy instalacji (passwd). Pozostali nie mają hasła (konto zablokowane),
@@ -85,7 +85,7 @@
     "d /home/wspolne 0750 root wspolne -"
     "d /home/wspolne/Obsydian 2770 Jacek wspolne -"
     "d /home/wspolne/Projekty 2770 Jacek wspolne -"
-    "d /home/wspolne/Dla_Claude 2770 Jacek wspolne -" # kopie z pokaz-claude
+    "d /home/wspolne/Dla_Claude 2770 Jacek wspolne -" # stare kopie z pokaz-claude (zob. ForClient w users/claude/sharing.nix)
     "a+ /home/wspolne/Obsydian - - - - default:group:wspolne:rwx,group:wspolne:rwx"
     "a+ /home/wspolne/Projekty - - - - default:group:wspolne:rwx,group:wspolne:rwx"
     "a+ /home/wspolne/Dla_Claude - - - - default:group:wspolne:rwx,group:wspolne:rwx"

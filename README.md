@@ -5,29 +5,35 @@ Konfiguracja NixOS dla komputerów Jacka (flake). Teraz: `justjackpc`, w przysz�
 ```
 flake.nix                  wejścia: nixpkgs 26.05, disko, lanzaboote v1.2.0, sops-nix
 hosts/justjackpc/          ten komputer: nazwa, sprzęt, układ dysków (disko)
-modules/                   wspólne moduły (każdy plik = jeden temat, opis na górze pliku)
+modules/                   wspólne moduły, w podfolderach wg kategorii (każdy plik = jeden temat, opis na górze pliku)
 secrets/                   sekrety sops (zaszyfrowane), patrz .sops.yaml
 ```
 
+Podział `modules/` na podfoldery (`system/`, `security/`, `users/`, `desktop/`, `apps/`, `network/`) wzorowany
+na tym, jak grupuje swoje moduły sam nixpkgs (`nixos/modules/{services,security,hardware,...}`) –
+patrz [NixOS Wiki: NixOS modules](https://wiki.nixos.org/wiki/NixOS_modules). Układ katalogów flake nie ma
+jednego oficjalnego standardu (patrz [dyskusja na Discourse](https://discourse.nixos.org/t/how-do-you-structure-your-nixos-configs/65851)) –
+to świadomy wybór, nie wymóg.
+
 | Moduł | Co robi |
 |---|---|
-| `opcje.nix` | przełączniki `moje.*` (secureBoot, hardening, hidepid, opensnitch, sekrety) |
-| `baza.nix` | język (EN + klawiatura/formaty PL), Nix, rozruch, zram, tmpfs, scrub, smartd |
-| `secure-boot.nix` | lanzaboote + sbctl |
-| `nvidia.nix` | RTX 2070, otwarte moduły |
-| `pulpit.nix` | Plasma 6 (Wayland), PipeWire, drukarka, czcionki, Firefox, GnuPG, YubiKey |
-| `siec.nix` | NetworkManager (stały MAC), resolved, nftables, avahi, bez SSH |
-| `hardening.nix` | sysctl, parametry jądra, blokada modułów, sudo-rs, dbus-broker, hidepid |
-| `opensnitch.nix` | zapora aplikacyjna + okno pytań w sesji Jacka |
-| `uzytkownicy.nix` | Jacek, claude, game_user, zeroroot, foldery wspólne, reguła polkit dla ego |
-| `claude.nix` | Claude Code jako `claude`, `daj-claude` / `zabierz-claude` / `pokaz-claude`, Chromium (claude) |
-| `gry.nix` | Steam, Heroic (jako game_user), Proton-GE, gamescope, GameMode, Prism, Wine |
-| `zeroroot.nix` | kwarantanna: bez sieci, gamescope + bubblewrap |
-| `secure.nix` | `secure_user`: utwardzony Firefox do banku i urzędów, start przez ego **z hasłem**, lista domen w OpenSnitch, YubiKey (FIDO2), dokumenty w `/home/secure-dokumenty` |
-| `monitoring.nix` | ClamAV, auditd, Lynis, `nix store verify`, vulnix, strażnik plików startowych i miejsca |
-| `kopie.nix` | snapper (/home), restic → NAS, udział Modele_3D (dwa ostatnie po dodaniu sekretów) |
-| `pakiety.nix` | aplikacje wybrane przy migracji (lista `APLIKACJE.md` z folderu migracji) |
-| `awaryjny.nix` | pozycja „awaryjny” w menu rozruchu: bez hardeningu i bez OpenSnitch |
+| `system/options.nix` | przełączniki `moje.*` (secureBoot, hardening, hidepid, opensnitch, sekrety) |
+| `system/base.nix` | język (EN + klawiatura/formaty PL), Nix, rozruch, zram, tmpfs, scrub, smartd |
+| `security/secure-boot.nix` | lanzaboote + sbctl |
+| `desktop/nvidia.nix` | RTX 2070, otwarte moduły |
+| `desktop/desktop.nix` | Plasma 6 (Wayland), PipeWire, drukarka, czcionki, Firefox, GnuPG, YubiKey |
+| `network/network.nix` | NetworkManager (stały MAC), resolved, nftables, avahi, bez SSH |
+| `security/hardening.nix` | sysctl, parametry jądra, blokada modułów, sudo-rs, dbus-broker, hidepid |
+| `security/opensnitch.nix` | zapora aplikacyjna + okno pytań w sesji Jacka |
+| `users/users.nix` | Jacek, claude, game_user, zeroroot, foldery wspólne, reguła polkit dla ego |
+| `users/claude/` | Claude Code jako `claude`, `claude-view` / `claude-edit` / `claude-copy` / `claude-revoke`, `access-mcp`, Chromium (claude) |
+| `apps/games.nix` | Steam, Heroic (jako game_user), Proton-GE, gamescope, GameMode, Prism, Wine |
+| `users/zeroroot.nix` | kwarantanna: bez sieci, gamescope + bubblewrap |
+| `users/secure.nix` | `secure_user`: utwardzony Firefox do banku i urzędów, start przez ego **z hasłem**, lista domen w OpenSnitch, YubiKey (FIDO2), dokumenty w `/home/secure-dokumenty` |
+| `security/monitoring.nix` | ClamAV, auditd, Lynis, `nix store verify`, vulnix, strażnik plików startowych i miejsca |
+| `system/backups.nix` | snapper (/home), restic → NAS, udział Modele_3D (dwa ostatnie po dodaniu sekretów) |
+| `apps/packages.nix` | aplikacje wybrane przy migracji (lista `APLIKACJE.md` z folderu migracji) |
+| `system/emergency.nix` | pozycja „awaryjny” w menu rozruchu: bez hardeningu i bez OpenSnitch |
 
 Sprawdzenie bez instalowania (szczegóły i lista ręcznych testów: `TESTY_TODO.md`):
 - `nix build .#checks.x86_64-linux.justjackpc` – buduje cały system,
@@ -45,7 +51,7 @@ Sprawdzenie bez instalowania (szczegóły i lista ręcznych testów: `TESTY_TODO
 1. BIOS (MSI Z370): Secure Boot **wyłączony** na czas instalacji, tryb UEFI, hasło do BIOS-u.
 2. Uruchom instalator NixOS (minimal ISO 26.05), połącz z siecią.
 3. Skopiuj to repo na pendrive / `git clone` z Forgejo/GitHuba.
-4. W `modules/opcje.nix` **na pierwszy raz** ustaw `secureBoot.enable` na `false`
+4. W `modules/system/options.nix` **na pierwszy raz** ustaw `secureBoot.enable` na `false`
    (albo w `hosts/justjackpc/default.nix`: `moje.secureBoot.enable = false;`).
 5. Dyski (pyta o hasło LUKS = **klucz awaryjny**, od razu zapisz w Bitwardenie):
    ```
@@ -104,7 +110,7 @@ Hasło (klucz awaryjny) zostaje jako zapas. **Nigdy nie resetuj FIDO2 na YubiKey
 | OpenSnitch + ProtonVPN | aplikacja to Python → zapyta raz, odpowiedz „always” | – |
 | OpenSnitch + Jacek | `nix flake update`, `restic` jako Jacek zapytają (reguły systemowe są tylko dla roota) – „always” | – |
 | zeroroot | `zeroroot-uruchom kitty` → okno gamescope; w środku `curl example.com` = błąd, `ls /run/user` = pusto, brak dźwięku | `journalctl -k \| grep zeroroot` |
-| daj-claude | `daj-claude ~/Documents/plik.txt` → claude widzi go w `/home/wspolne/Udostepnione/`; po czasie znika (sprawdzone w teście VM) | `zabierz-claude` |
+| claude-view | `claude-view ~/Documents/plik.txt` → claude widzi oryginał (tylko odczyt) w `/home/wspolne/Shared/claude/`; po czasie znika (sprawdzone w teście VM) | `claude-revoke`, `claude-edit` (zapis), `claude-copy` (trwała kopia) |
 | Remmina → Win7 | `win7-rdp.sh` z `openssl-legacy.cnf` | `OPENSSL_CONF` w skrypcie |
 | Drukarka | System Settings → Printers → Add → `socket://192.168.50.157:9100`, sterownik gutenprint (DCP-T500W) lub „IPP Everywhere”, jeśli wykryje | – |
 | Bank i urzędy | menu → „Bank i urzędy (secure_user)” → okienko hasła → Firefox. Dopisz domeny banku w `moje.secure.domeny` (host), inne strony OpenSnitch zgłosi pytaniem. YubiKey jako klucz logowania w banku/login.gov.pl | `journalctl --user -b`, reguła polkit |

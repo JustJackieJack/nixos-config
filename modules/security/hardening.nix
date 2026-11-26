@@ -1,7 +1,7 @@
 # Utwardzenie bez hardened kernela (ten łamie NVIDIA i przestrzenie nazw).
 # Świadomie POMINIĘTE: lockdown, module.sig_enforce (łamią NVIDIA), ptrace_scope=2 (gry, debugery),
 # init_on_free (wydajność), AppArmor/SELinux (na NixOS praktycznie nie działają), USBGuard.
-# Blok „hardening” wyłącza tryb awaryjny w menu rozruchu (awaryjny.nix); sudo-rs i dbus-broker zostają.
+# Blok „hardening” wyłącza tryb awaryjny w menu rozruchu (emergency.nix); sudo-rs i dbus-broker zostają.
 {
   config,
   lib,
@@ -67,7 +67,7 @@ in
         "fs.protected_regular" = 2;
         "vm.max_map_count" = 1048576; # część gier tego wymaga
 
-        # sieć (rp_filter – patrz checkReversePath w siec.nix)
+        # sieć (rp_filter – patrz checkReversePath w network.nix)
         "net.ipv4.conf.all.accept_redirects" = 0;
         "net.ipv4.conf.default.accept_redirects" = 0;
         "net.ipv4.conf.all.secure_redirects" = 0;
@@ -107,7 +107,7 @@ in
     })
 
     # hidepid: zwykli użytkownicy widzą tylko swoje procesy.
-    # Grupa proc (gid 2000, uzytkownicy.nix: Jacek, claude + logind, polkit) widzi wszystko.
+    # Grupa proc (gid 2000, users.nix: Jacek, claude + logind, polkit) widzi wszystko.
     (lib.mkIf (cfg.enable && cfg.hidepid) {
       boot.specialFileSystems."/proc".options = [
         "hidepid=2"

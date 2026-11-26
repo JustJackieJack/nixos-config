@@ -75,12 +75,15 @@ pkgs.testers.runNixOSTest {
       # sekrety: testowy plik sops + jawny klucz testowy
       moje.sekrety.plik = ./dane/sekrety-testowe.yaml;
       # NAS w sieci testowej; moduł maszyny wirtualnej podmienia fileSystems, więc ten sam
-      # wpis montowania (z kopie.nix) podajemy mu jawnie
+      # wpis montowania (z backups.nix) podajemy mu jawnie. Scalamy (nie nadpisujemy) z
+      # mountami z admin-access.nix (ClaudeFiles) – stąd osobna opcja moje.claude.*, a nie
+      # odwołanie do config.fileSystems (to by było cykliczne: config.fileSystems sam jest
+      # ustawiany NA PODSTAWIE virtualisation.fileSystems przez moduł qemu-vm).
       moje.nas.adres = "nas";
       moje.secure.domeny = [ "nas" ]; # domena „dozwolona” w sieci testowej
       networking.extraHosts = "192.168.1.1 obcy-serwer"; # nazwa spoza listy domen secure_user
-      virtualisation.fileSystems = config.moje.nas.montowania;
-      # klucz trafia tam, gdzie na prawdziwym systemie (kopie.nix), przed odszyfrowaniem sekretów
+      virtualisation.fileSystems = config.moje.nas.montowania // config.moje.claude.adminAccessFileSystems;
+      # klucz trafia tam, gdzie na prawdziwym systemie (backups.nix), przed odszyfrowaniem sekretów
       system.activationScripts.kluczTestowy = lib.stringAfter [ "specialfs" ] ''
         install -d -m 0700 /var/lib/sops-nix
         install -m 0400 ${./dane/klucz-testowy.txt} /var/lib/sops-nix/key.txt
@@ -89,7 +92,7 @@ pkgs.testers.runNixOSTest {
       services.snapper.configs = lib.mkForce { };
       services.smartd.enable = lib.mkForce false; # wirtualne dyski nie mają SMART
       networking.networkmanager.unmanaged = [ "eth1" ]; # adres nadaje framework testów
-      users.users.Jacek.linger = true; # menedżer usług Jacka bez logowania (daj-claude, strażnik)
+      users.users.Jacek.linger = true; # menedżer usług Jacka bez logowania (access-mcp, strażnik)
       virtualisation = {
         memorySize = 4096;
         cores = 4;
@@ -158,46 +161,86 @@ pkgs.testers.runNixOSTest {
           pc.succeed(jako("Jacek", "echo d >> /home/wspolne/Projekty/kat/b.txt"))
           pc.fail(jako("game_user", "ls /home/wspolne/Projekty"))
 
-      with subtest("daj-claude / zabierz-claude / pokaz-claude"):
+      with subtest("claude-view / claude-edit / claude-copy / claude-revoke"):
           pc.succeed(jacek("mkdir -p ~/Documents ~/.config/gh ~/Projekt2 && echo tajne > ~/Documents/t.txt && chmod 600 ~/Documents/t.txt && echo token > ~/.config/gh/hosts.yml && echo a > ~/Projekt2/f"))
           pc.fail(jako("claude", "cat /home/Jacek/Documents/t.txt"))
-          pc.fail(jacek("daj-claude ~/.config"))  # zawiera sekret
-          pc.fail(jacek("daj-claude ~/.config/gh/hosts.yml"))  # sam sekret
-          pc.fail(jacek("daj-claude ~"))  # cały dom
-          pc.fail(jacek("daj-claude -t zly ~/Documents/t.txt"))  # zły czas
-          out = pc.succeed(jacek("daj-claude -t 10s ~/Documents/t.txt"))
-          cel = out.split("→ ")[1].split(" ")[0]
-          print("udostępniono:", cel)
+          pc.fail(jacek("claude-view ~/.config"))  # zawiera sekret
+          pc.fail(jacek("claude-view ~/.config/gh/hosts.yml"))  # sam sekret
+          pc.fail(jacek("claude-view ~"))  # cały dom
+          pc.fail(jacek("claude-view -t zly ~/Documents/t.txt"))  # zły czas
+          cel = pc.succeed(jacek("claude-view -t 10s ~/Documents/t.txt")).strip()
+          print("udostępniono (view):", cel)
           assert pc.succeed(jako("claude", f"cat {cel}")).strip() == "tajne"
-          pc.fail(jako("claude", f"echo x >> {cel}"))  # tylko odczyt
+          pc.fail(jako("claude", f"echo x >> {cel}"))  # tylko odczyt – test na naprawiony bug z flagą ro
           # dom Jacka nadal zamknięty – także dla plików 644 (to był błąd poprzedniej wersji)
           pc.fail(jako("claude", "cat /home/Jacek/Documents/t.txt"))
           pc.fail(jako("claude", "cat /home/Jacek/.config/gh/hosts.yml"))
           pc.fail(jako("claude", "ls /home/Jacek"))
-          # katalog z zapisem + zabranie od razu
-          out = pc.succeed(jacek("daj-claude -w -t 1h ~/Projekt2"))
-          cel2 = out.split("→ ")[1].split(" ")[0]
+          # claude-edit: zapis NA ORYGINALE + zabranie od razu
+          cel2 = pc.succeed(jacek("claude-edit -t 1h ~/Projekt2")).strip()
           pc.succeed(jako("claude", f"echo od-claude >> {cel2}/f"))
           pc.succeed(jako("Jacek", "grep -q od-claude /home/Jacek/Projekt2/f"))
-          pc.succeed(jacek("zabierz-claude ~/Projekt2"))
+          pc.succeed(jacek("claude-revoke ~/Projekt2"))
           pc.fail(jako("claude", f"cat {cel2}/f"))
           pc.fail(f"test -e {cel2}")
-          # wygaśnięcie
+          # wygaśnięcie (view z 10s wyżej)
           pc.sleep(15)
           pc.fail(jako("claude", f"cat {cel}"))
           pc.fail(f"test -e {cel}")
+          # claude-copy: TRWAŁA kopia – edycja kopii nie wraca do oryginału, kopia nie wygasa
+          cel3 = pc.succeed(jacek("claude-copy ~/Documents/t.txt")).strip()
+          assert pc.succeed(jako("claude", f"cat {cel3}")).strip() == "tajne"
+          pc.succeed(jako("claude", f"echo zmiana >> {cel3}"))  # kopia jest zapisywalna
+          pc.fail(jako("Jacek", "grep -q zmiana /home/Jacek/Documents/t.txt"))  # ale oryginał nietknięty
+          pc.sleep(2)
+          pc.succeed(f"test -e {cel3}")  # kopia NIE wygasa jak view/edit
           # atak: pomocnik root dostaje dowiązanie do pliku roota → musi odmówić
           pc.succeed(jacek("ln -s /etc/shadow ~/Documents/zly && ln -s /root ~/Documents/zlykat"))
-          pc.fail(jacek("sudo -n \"$(readlink -f \"$(command -v claude-montuj)\")\" dodaj ro /home/Jacek/Documents/zly 1h"))
-          pc.fail(jacek("sudo -n \"$(readlink -f \"$(command -v claude-montuj)\")\" dodaj ro /home/Jacek/Documents/zlykat 1h"))
-          pc.fail(jacek("sudo -n \"$(readlink -f \"$(command -v claude-montuj)\")\" dodaj ro /etc/shadow 1h"))
-          pc.fail(jacek("sudo -n \"$(readlink -f \"$(command -v claude-montuj)\")\" zabierz /etc"))
-          pc.succeed("test -z \"$(ls -A /home/wspolne/Udostepnione)\"")
-          pc.succeed("! findmnt -rn -o TARGET | grep -q Udostepnione")
-          # inny użytkownik nie może użyć pomocnika
-          pc.fail(jako("game_user", "sudo -n /run/current-system/sw/bin/claude-montuj zabierz"))
-          pc.succeed(jacek("pokaz-claude ~/Documents/t.txt"))
-          pc.succeed(jako("claude", "cat /home/wspolne/Dla_Claude/t.txt_*"))
+          pc.fail(jacek("sudo -n \"$(readlink -f \"$(command -v claude-share)\")\" add view Jacek claude /home/Jacek/Documents/zly 1h"))
+          pc.fail(jacek("sudo -n \"$(readlink -f \"$(command -v claude-share)\")\" add view Jacek claude /home/Jacek/Documents/zlykat 1h"))
+          pc.fail(jacek("sudo -n \"$(readlink -f \"$(command -v claude-share)\")\" add view Jacek claude /etc/shadow 1h"))
+          pc.fail(jacek("sudo -n \"$(readlink -f \"$(command -v claude-share)\")\" remove claude /etc"))
+          pc.succeed("test -z \"$(ls -A /home/wspolne/Shared/claude 2>/dev/null)\"")
+          pc.succeed("! findmnt -rn -o TARGET | grep -q Shared")
+          # inny użytkownik nie może użyć pomocnika, nawet dla samego siebie
+          pc.fail(jako("game_user", "sudo -n /run/current-system/sw/bin/claude-share remove claude"))
+          # źle zadeklarowane source-user: plik nie należy do podanego konta
+          pc.fail(jacek("sudo -n \"$(readlink -f \"$(command -v claude-share)\")\" add view game_user claude /home/Jacek/Documents/t.txt 1h"))
+
+      with subtest("claude-share: inne konto źródłowe (game_user → claude), bez furtki domyślnej"):
+          pc.succeed(jako("game_user", "echo gra-dane > /mnt/games/sekret_testowy.txt"))
+          pc.fail(jako("claude", "ls /mnt/games"))  # bez wyjątku wciąż zablokowane
+          cel4 = pc.succeed(jacek("sudo -n \"$(readlink -f \"$(command -v claude-share)\")\" add view game_user claude /mnt/games/sekret_testowy.txt 10s")).strip()
+          assert pc.succeed(jako("claude", f"cat {cel4}")).strip() == "gra-dane"
+          pc.fail(jako("claude", "ls /mnt/games"))  # wyjątek dotyczy tylko udostępnionego pliku
+          pc.sleep(15)
+          pc.fail(jako("claude", f"cat {cel4}"))
+
+      with subtest("old Polish command names no longer exist"):
+          for old in ["daj-claude", "pokaz-claude", "zabierz-claude", "claude-montuj", "claude-udostepnij", "claude-sesja", "claude-dom", "dostep-mcp"]:
+              pc.fail(f"command -v {old}")
+
+      with subtest("ClaudeFiles: trwały, zapisywalny widok plików claude dla Jacka"):
+          for nazwa in ["ssh", "skills", "claude.json", "rules", "agents", "commands"]:
+              pc.succeed(f"findmnt /home/wspolne/ClaudeFiles/{nazwa}")
+          # CLAUDE.md NIE jest tu udostępniane - instructions.nix nadpisuje je co restart,
+          # zob. komentarz w admin-access.nix. Zamiast niego test na pliku .ssh/config.
+          pc.succeed(jako("claude", "echo 'Host test' > ~/.ssh/config"))
+          # Jacek czyta, bez sudo
+          out = pc.succeed(jacek("cat ~/Claude/ssh/config"))
+          assert "test" in out.lower()
+          # Jacek edytuje – to ten sam i-węzeł, zmiana trafia do prawdziwego pliku claude
+          pc.succeed(jacek("echo dopisek-jacka >> ~/Claude/ssh/config"))
+          pc.succeed(jako("claude", "grep -q dopisek-jacka /home/claude/.ssh/config"))
+          # nowy plik, który CLAUDE stworzy w udostępnionym KATALOGU, widoczny u Jacka od razu (bez remontowania)
+          pc.succeed(jako("claude", "mkdir -p ~/.claude/skills/nowy && echo x > ~/.claude/skills/nowy/SKILL.md"))
+          pc.succeed(jacek("test -f ~/Claude/skills/nowy/SKILL.md"))
+          # Jacek też może DOPISAĆ nowy plik w udostępnionym katalogu (domyślne ACL = prawo zapisu na katalogu)
+          pc.succeed(jacek("echo od-jacka > ~/Claude/skills/od-jacka.txt"))
+          pc.succeed(jako("claude", "cat /home/claude/.claude/skills/od-jacka.txt"))
+          # inne konta nie mają żadnego dostępu do folderu ClaudeFiles (0700 Jacek)
+          pc.fail(jako("claude", "ls /home/wspolne/ClaudeFiles"))
+          pc.fail(jako("game_user", "ls /home/wspolne/ClaudeFiles"))
 
       with subtest("zapora przychodząca: KDE Connect z LAN tak, inne porty nie"):
           pc.succeed("systemd-run --unit=kdec python3 -m http.server 1716")
@@ -420,16 +463,21 @@ pkgs.testers.runNixOSTest {
           pc.succeed("test \"$(systemctl --failed --no-legend --plain | wc -l)\" = 0")
 
       with subtest("restart: wszystko wraca, tymczasowe udostępnienia dla claude znikają"):
-          pc.succeed(jacek("daj-claude -t 1h ~/Documents/t.txt"))
-          pc.succeed("test -n \"$(ls -A /home/wspolne/Udostepnione)\"")
+          pc.succeed(jacek("claude-view -t 1h ~/Documents/t.txt"))
+          pc.succeed("test -n \"$(ls -A /home/wspolne/Shared/claude)\"")
           pc.shutdown()
           pc.start()
           pc.wait_for_unit("multi-user.target")
           pc.wait_for_unit("opensnitchd.service")
           pc.wait_for_unit("user@1000.service")
           pc.succeed("test \"$(systemctl --failed --no-legend --plain | wc -l)\" = 0")
-          pc.succeed("test -z \"$(ls -A /home/wspolne/Udostepnione)\"")
+          pc.succeed("test -z \"$(ls -A /home/wspolne/Shared/claude 2>/dev/null)\"")
           pc.fail(jako("claude", "cat /home/Jacek/Documents/t.txt"))
+          # ClaudeFiles to NIE jest tymczasowe udostępnienie - musi wrócić po restarcie samo.
+          # ssh/config (nie CLAUDE.md - to nadpisywane co restart z założenia, zob. wyżej) musi
+          # przetrwać, bo to prawdziwy zapis na dysku.
+          pc.succeed("findmnt /home/wspolne/ClaudeFiles/ssh")
+          pc.succeed(jacek("grep -q dopisek-jacka ~/Claude/ssh/config"))
           pc.succeed("test \"$(cat /run/secrets/restic/haslo)\" = haslo-testowe-restic")
           pc.fail(jako("zeroroot", "curl -sf -m 5 http://nas > /dev/null"))
           pc.sleep(3)
