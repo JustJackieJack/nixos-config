@@ -63,9 +63,10 @@ in
     # --ozone-platform=x11: Heroic (Electron) zawieszało samo okno (nie cały pulpit) losowo na
     # NVIDIA + natywny Wayland Ozone - znany problem stabilności Electrona na Wayland/NVIDIA.
     # Wymuszenie XWayland naprawia to bez utraty funkcji.
-    # --machinectl-bare: zob. komentarz przy jakoGameUser - bez xdg-desktop-portal, żeby
-    # wywołania powiadomień (libnotify) nie czekały na timeout D-Bus.
-    (jakoGameUser "Heroic" "heroic --ozone-platform=x11" "com.heroicgameslauncher.hgl" "--machinectl-bare")
+    # --machinectl (nie -bare): próbowaliśmy -bare licząc że to naprawi zawieszenia od D-Bus,
+    # ale to nie miało znaczenia (prawdziwa przyczyna niżej, usluga-powiadomien-game-user) -
+    # bare kosztowałoby utratę xdg-desktop-portal (np. natywne okna wyboru plików).
+    (jakoGameUser "Heroic" "heroic --ozone-platform=x11" "com.heroicgameslauncher.hgl" "--machinectl")
   ];
 
   systemd.tmpfiles.rules = [
@@ -74,4 +75,22 @@ in
     "d /mnt/games/SteamLibrary 0700 game_user users -"
     "d /mnt/games/Heroic 0700 game_user users -"
   ];
+
+  # Sesja game_user ma zarejestrowaną usługę D-Bus dla powiadomień
+  # (org.kde.plasma.Notifications.service), ale plasmashell (prawdziwa obsługa) w tej minimalnej
+  # sesji nigdy nie startuje - więc KAŻDA próba Heroica/Steama pokazania powiadomienia (np. przy
+  # pobieraniu/instalacji) wisi ~25s na timeout D-Bus, i powtarza się tak długo, jak trwa dana
+  # czynność - wygląda jak ciągłe losowe zawieszenia UI. Lekki demon poniżej odpowiada na
+  # wywołanie od razu, więc nic nie czeka na timeout.
+  systemd.user.services.dunst-game-user = {
+    description = "Lekki demon powiadomień dla sesji game_user (naprawia zawieszenia Heroic/Steam od D-Bus)";
+    wantedBy = [ "graphical-session.target" ];
+    partOf = [ "graphical-session.target" ];
+    unitConfig.ConditionUser = "game_user";
+    serviceConfig = {
+      ExecStart = "${pkgs.dunst}/bin/dunst";
+      Restart = "on-failure";
+      RestartSec = 2;
+    };
+  };
 }
