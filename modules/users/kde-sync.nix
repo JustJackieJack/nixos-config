@@ -26,7 +26,7 @@ let
     "dev_user"
   ];
 
-  elementy = [
+  items = [
     ".config/kdeglobals"
     ".config/kwinrc"
     ".config/plasmarc"
@@ -39,7 +39,7 @@ let
     ".local/share/aurorae"
   ];
 
-  bashElementy = lib.concatStringsSep " " (map lib.escapeShellArg elementy);
+  bashItems = lib.concatStringsSep " " (map lib.escapeShellArg items);
   bashTargets = lib.concatStringsSep "|" targets;
 
   kdeSync = pkgs.writeShellApplication {
@@ -49,13 +49,13 @@ let
       rsync
     ];
     text = ''
-      elementy=(${bashElementy})
+      items=(${bashItems})
 
-      kopiuj() {
-        # kopiuj ZRODLO_BAZA CEL_BAZA - synchronizuje każdy element z listy, zachowując
+      copy_files() {
+        # copy_files SRC_BASE DST_BASE - synchronizuje każdy element z listy, zachowując
         # strukturę ścieżki (działa jednolicie dla plików i katalogów).
         src_base="$1" dst_base="$2"
-        for e in "''${elementy[@]}"; do
+        for e in "''${items[@]}"; do
           src="$src_base/$e"
           [ -e "$src" ] || continue
           dst="$dst_base/$e"
@@ -66,7 +66,7 @@ let
 
       case "''${1:-}" in
         export)
-          kopiuj /home/Jacek "${snapshotDir}"
+          copy_files /home/Jacek "${snapshotDir}"
           chown -R root:shared -- "${snapshotDir}"
           echo "zapisano migawkę wyglądu KDE z /home/Jacek do ${snapshotDir}" >&2
           ;;
@@ -76,8 +76,8 @@ let
             ${bashTargets}) ;;
             *) echo "niedozwolone konto: $target (dozwolone: ${lib.concatStringsSep ", " targets})" >&2; exit 1 ;;
           esac
-          kopiuj "${snapshotDir}" "/home/$target"
-          for e in "''${elementy[@]}"; do
+          copy_files "${snapshotDir}" "/home/$target"
+          for e in "''${items[@]}"; do
             [ -e "/home/$target/$e" ] || continue
             chown -R "$target":users -- "/home/$target/$e"
           done

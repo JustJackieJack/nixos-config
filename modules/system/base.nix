@@ -23,12 +23,12 @@
       "nix-command"
       "flakes"
     ];
-    # Z demona Nix korzystają tylko Jacek, claude i straznik (vulnix pyta o zależności);
+    # Z demona Nix korzystają tylko Jacek, claude i guardian (vulnix pyta o zależności);
     # game_user i zeroroot nie.
     allowed-users = [
       "Jacek"
       "claude"
-      "straznik"
+      "guardian"
     ];
     # trusted-users zostaje domyślne (tylko root): nikt inny nie doda niepodpisanych paczek.
     auto-optimise-store = true;

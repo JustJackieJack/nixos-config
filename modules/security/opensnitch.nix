@@ -14,8 +14,8 @@
   ...
 }:
 let
-  zezwalajSciezke = nazwa: sciezka: {
-    name = nazwa;
+  allowPath = name: path: {
+    name = name;
     enabled = true;
     action = "allow";
     duration = "always";
@@ -23,13 +23,13 @@ let
       type = "simple";
       sensitive = false;
       operand = "process.path";
-      data = sciezka;
+      data = path;
     };
   };
   # To samo, ale tylko gdy program działa jako root (demon). Dla narzędzi, które może uruchomić
   # każdy (nix, restic): inaczej np. game_user mógłby użyć „nix” do pobrania czegokolwiek bez pytania.
-  zezwalajDlaUid = nazwa: sciezka: uidStr: {
-    name = nazwa;
+  allowForUid = name: path: uidStr: {
+    name = name;
     enabled = true;
     action = "allow";
     duration = "always";
@@ -43,7 +43,7 @@ let
           type = "simple";
           operand = "process.path";
           sensitive = false;
-          data = sciezka;
+          data = path;
         }
         {
           type = "simple";
@@ -54,13 +54,13 @@ let
       ];
     };
   };
-  zezwalajRootowi = nazwa: sciezka: zezwalajDlaUid nazwa sciezka "0";
+  allowForRoot = name: path: allowForUid name path "0";
   # Blokada (nie pytanie oknem) dla konkretnej ścieżki+UID - precedence, sprawdzane przed resztą
   # reguł, jak blokada zeroroot niżej. Dla Firefoksa Jacka: "ma nie istnieć" ma być twarde, nie
   # "pytanie, które można kliknąć zawsze zezwól" - inaczej to żadna różnica wobec stanu przed
   # izolacją w browse_user.
-  blokujDlaUid = nazwa: sciezka: uidStr: {
-    name = nazwa;
+  blockForUid = name: path: uidStr: {
+    name = name;
     enabled = true;
     precedence = true;
     action = "reject";
@@ -75,7 +75,7 @@ let
           type = "simple";
           operand = "process.path";
           sensitive = false;
-          data = sciezka;
+          data = path;
         }
         {
           type = "simple";
@@ -106,7 +106,7 @@ lib.mkIf config.moje.opensnitch.enable {
       lib.optionalAttrs (config.moje.nas.montowania != { }) {
         # Montowanie udziału NAS: połączenie robi jądro, ale OpenSnitch przypisuje je procesowi
         # mount.cifs (root) – bez tej reguły udział by się nie zamontował (wykrył test VM).
-        "109-mount-cifs" = zezwalajRootowi "109-mount-cifs" "${lib.getBin pkgs.cifs-utils}/bin/mount.cifs";
+        "109-mount-cifs" = allowForRoot "109-mount-cifs" "${lib.getBin pkgs.cifs-utils}/bin/mount.cifs";
       }
       // {
         # --- najpierw blokady (precedence = sprawdzane przed resztą) ---
@@ -171,36 +171,36 @@ lib.mkIf config.moje.opensnitch.enable {
         # zezwól" - główna przeglądarka to teraz browse_user (ma WŁASNĄ regułę "zawsze zezwól",
         # browse.nix), secure_user ma swoją listę domen (bank.nix) - Firefox Jacka wprost nie ma
         # już żadnego uzasadnionego przypadku użycia, stąd blokada, nie reguła "allow".
-        "020-firefox-blokada-jacka" = blokujDlaUid "020-firefox-blokada-jacka" "${pkgs.firefox-unwrapped}/lib/firefox/firefox" (
+        "020-firefox-blokada-jacka" = blockForUid "020-firefox-blokada-jacka" "${pkgs.firefox-unwrapped}/lib/firefox/firefox" (
           uid "Jacek"
         );
 
         # --- usługi systemowe ---
         "100-resolved" =
-          zezwalajSciezke "100-resolved" "${config.systemd.package}/lib/systemd/systemd-resolved";
+          allowPath "100-resolved" "${config.systemd.package}/lib/systemd/systemd-resolved";
         "101-timesyncd" =
-          zezwalajSciezke "101-timesyncd" "${config.systemd.package}/lib/systemd/systemd-timesyncd";
+          allowPath "101-timesyncd" "${config.systemd.package}/lib/systemd/systemd-timesyncd";
         "102-networkmanager" =
-          zezwalajSciezke "102-networkmanager" "${config.networking.networkmanager.package}/bin/NetworkManager";
+          allowPath "102-networkmanager" "${config.networking.networkmanager.package}/bin/NetworkManager";
         # Nix ≥ 2.34: nix.package to opakowanie, a bin/nix w nim to dowiązanie do nix-cli. OpenSnitch
         # widzi PRAWDZIWĄ ścieżkę procesu, więc wskazujemy nix-cli (wykrył to test w maszynie wirtualnej).
-        "103-nix-daemon" = zezwalajRootowi "103-nix-daemon" "${nixCli}/bin/nix";
-        "104-freshclam" = zezwalajSciezke "104-freshclam" "${config.services.clamav.package}/bin/freshclam";
+        "103-nix-daemon" = allowForRoot "103-nix-daemon" "${nixCli}/bin/nix";
+        "104-freshclam" = allowPath "104-freshclam" "${config.services.clamav.package}/bin/freshclam";
         # bin/restic w nixpkgs to opakowanie (makeBinaryWrapper) – proces to bin/.restic-wrapped
         # (wykrył test VM: bez tego codzienna kopia na NAS byłaby blokowana)
-        "105-restic" = zezwalajRootowi "105-restic" "${pkgs.restic}/bin/.restic-wrapped";
+        "105-restic" = allowForRoot "105-restic" "${pkgs.restic}/bin/.restic-wrapped";
         "106-cups-socket" =
-          zezwalajSciezke "106-cups-socket" "${config.services.printing.package}/lib/cups/backend/socket";
+          allowPath "106-cups-socket" "${config.services.printing.package}/lib/cups/backend/socket";
         "107-cups-ipp" =
-          zezwalajSciezke "107-cups-ipp" "${config.services.printing.package}/lib/cups/backend/ipp";
+          allowPath "107-cups-ipp" "${config.services.printing.package}/lib/cups/backend/ipp";
 
         # avahi: wykrywanie drukarki (mDNS) – działa też przed zalogowaniem, gdy nie ma okna pytań.
         # (sbin/avahi-daemon to dowiązanie do bin/ – reguła musi wskazywać plik docelowy)
-        "108-avahi" = zezwalajSciezke "108-avahi" "${config.services.avahi.package}/bin/avahi-daemon";
+        "108-avahi" = allowPath "108-avahi" "${config.services.avahi.package}/bin/avahi-daemon";
 
         # --- zadania strażnika (vulnix pobiera bazę CVE) ---
-        "110-straznik" = {
-          name = "110-straznik";
+        "110-guardian" = {
+          name = "110-guardian";
           enabled = true;
           action = "allow";
           duration = "always";
@@ -208,7 +208,7 @@ lib.mkIf config.moje.opensnitch.enable {
             type = "simple";
             sensitive = false;
             operand = "user.id";
-            data = uid "straznik";
+            data = uid "guardian";
           };
         };
       };

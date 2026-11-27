@@ -1,44 +1,44 @@
 # Centralny rejestr kont: kto jest "główny" (root=true, prawdziwy człowiek, własne hasło,
-# widoczny na ekranie logowania) a kto "poduser"/piaskownica (szablon=..., zablokowane hasło,
+# widoczny na ekranie logowania) a kto "poduser"/piaskownica (template=..., zablokowane hasło,
 # ukryty na ekranie logowania, wchodzi się tylko przez ego/sudo rodzica). Z tej listy generowane
 # JEDNOLICIE dla każdego wpisu: konto systemowe, biała lista polkit (ego --machinectl bez hasła od
 # rodzica), reguła sudo-rs (rodzic -> konto, bez hasła) i wpis w hiddenUsers - cztery rzeczy, które
 # wcześniej były ręcznie duplikowane w 2-3 plikach na każde nowe konto.
 #
-# Pole `rodzic` (gdy ustawione) jest też automatycznie przekazywane do szablonu danego konta - te
-# szablony, którym na tym zależy (zerotrust, bank), dodają `rodzic` do swojej grupy wymiany/
+# Pole `parent` (gdy ustawione) jest też automatycznie przekazywane do szablonu danego konta - te
+# szablony, którym na tym zależy (zerotrust, bank), dodają `parent` do swojej grupy wymiany/
 # dokumentów, żeby mógł tam zaglądać bez przełączania tożsamości. Dla `secure_user`, które celowo
-# NIE ma `rodzic` w rejestrze (patrz niżej), ta sama wartość jest podawana ręcznie przez
-# `szablonArgs.rodzic`.
+# NIE ma `parent` w rejestrze (patrz niżej), ta sama wartość jest podawana ręcznie przez
+# `templateArgs.parent`.
 #
 # Żeby dodać nową piaskownicę dla innego, prawdziwego użytkownika (np. "dziecko-games" dla konta
-# "Dziecko", kiedyś): jeden nowy wpis na liście `konta` niżej, nic więcej.
+# "Dziecko", kiedyś): jeden nowy wpis na liście `accounts` niżej, nic więcej.
 #
-# `dostepRodzica = true;` na wpisie daje `rodzic` PEŁNY (rekurencyjny + domyślny ACL) dostęp do
+# `parentAccess = true;` na wpisie daje `parent` PEŁNY (rekurencyjny + domyślny ACL) dostęp do
 # katalogu tego konta, z własnej sesji rodzica, bez przełączania tożsamości - ten sam mechanizm
 # co ClaudeFiles, tylko dla całego katalogu, nie wybranych plików. Domyślnie wyłączone - włącz
 # jawnie tam, gdzie potrzebne. Dwa opcjonalne dodatki:
-#   - `dostepRodzicaSciezka` - który katalog dostaje ACL, jeśli nie `/home/<nazwa>` (np.
+#   - `parentAccessPath` - który katalog dostaje ACL, jeśli nie `/home/<name>` (np.
 #     game_user trzyma biblioteki gier na `/mnt/games`, nie we własnym domu - patrz niżej).
-#   - `dostepRodzicaSkrot` - nazwa dowiązania w domu rodzica (np. "Gry" → `/home/Jacek/Gry`),
+#   - `parentAccessShortcut` - nazwa dowiązania w domu rodzica (np. "Games" → `/home/Jacek/Games`),
 #     żeby nie trzeba było pamiętać surowej ścieżki.
 #
 # Kto NIE jest tu w pełni objęty:
-#   - `claude` (pole `szablon` nieustawione) - ma własny, bardziej złożony mechanizm w
+#   - `claude` (pole `template` nieustawione) - ma własny, bardziej złożony mechanizm w
 #     modules/users/claude/ (MCP, claude-share, ClaudeFiles), inny rodzaj reużywalności.
-#   - `secure_user` (pole `rodzic` CELOWO nieustawione) - wymaga HASŁA do wejścia (polkit
+#   - `secure_user` (pole `parent` CELOWO nieustawione) - wymaga HASŁA do wejścia (polkit
 #     AUTH_SELF_KEEP), więc nie może dostać automatycznej bezhasłowej reguły, jaką ten plik
-#     generuje dla każdego wpisu z `rodzic`; jego własna, hasło-wymagająca reguła polkit jest w
+#     generuje dla każdego wpisu z `parent`; jego własna, hasło-wymagająca reguła polkit jest w
 #     modules/users/szablony/bank.nix, niezależna od mechanizmu tutaj.
 { lib, pkgs, ... }:
 let
-  konta = [
+  accounts = [
     {
-      nazwa = "Jacek";
+      name = "Jacek";
       uid = 1000;
-      opis = "Jacek";
+      description = "Jacek";
       root = true;
-      grupy = [
+      groups = [
         "networkmanager"
         "wireshark"
         "proc" # widzi wszystkie procesy przy hidepid
@@ -48,92 +48,92 @@ let
       ];
     }
     {
-      nazwa = "claude";
+      name = "claude";
       uid = 1001;
-      opis = "Claude (asystent)";
-      rodzic = "Jacek";
+      description = "Claude (asystent)";
+      parent = "Jacek";
     }
     {
-      nazwa = "game_user";
+      name = "game_user";
       uid = 1002;
-      opis = "Gry (Steam, Heroic)";
-      rodzic = "Jacek";
-      szablon = "gry";
-      szablonArgs = {
-        biblioteka = "/mnt/games"; # partycja fizyczna, nie coś wywodzącego się z nazwy konta
+      description = "Gry (Steam, Heroic)";
+      parent = "Jacek";
+      template = "gry";
+      templateArgs = {
+        library = "/mnt/games"; # partycja fizyczna, nie coś wywodzącego się z nazwy konta
       };
       # Łatwy, stały dostęp Jacka do bibliotek gier (modyfikacja save'ów, modów) - bez sudo/ego,
-      # od razu w swojej sesji. Ścieżka to "biblioteka" wyżej, nie /home/game_user (tam nic
+      # od razu w swojej sesji. Ścieżka to "library" wyżej, nie /home/game_user (tam nic
       # istotnego nie ma - cała biblioteka jest na /mnt/games).
-      dostepRodzica = true;
-      dostepRodzicaSciezka = "/mnt/games";
-      dostepRodzicaSkrot = "Gry";
+      parentAccess = true;
+      parentAccessPath = "/mnt/games";
+      parentAccessShortcut = "Games";
     }
     {
-      nazwa = "zeroroot";
+      name = "zeroroot";
       uid = 1003;
-      opis = "Kwarantanna (podejrzane programy)";
-      rodzic = "Jacek";
-      szablon = "zerotrust";
+      description = "Kwarantanna (podejrzane programy)";
+      parent = "Jacek";
+      template = "zerotrust";
       # Łatwy, stały dostęp Jacka do CAŁEGO domu zeroroota (nie tylko wąskiego folderu wymiany
       # /srv/zeroroot-exchange) - dużo operacji na plikach podczas pracy z podejrzanymi programami.
-      dostepRodzica = true;
-      dostepRodzicaSkrot = "Zeroroot";
+      parentAccess = true;
+      parentAccessShortcut = "Zeroroot";
     }
     {
-      nazwa = "secure_user";
+      name = "secure_user";
       uid = 1004;
-      opis = "Bank i urzędy";
-      # bez `rodzic` - patrz komentarz na górze pliku
-      szablon = "bank";
-      szablonArgs = {
-        dokumenty = "/home/secure-documents"; # zahardkodowane też w modules/system/backups.nix
-        skrotJacek = "BankDocuments";
-        rodzic = "Jacek"; # tylko dla grupy dokumentów - NIE daje bezhasłowego wejścia (patrz wyżej)
+      description = "Bank i urzędy";
+      # bez `parent` - patrz komentarz na górze pliku
+      template = "bank";
+      templateArgs = {
+        documents = "/home/secure-documents"; # zahardkodowane też w modules/system/backups.nix
+        parentShortcut = "BankDocuments";
+        parent = "Jacek"; # tylko dla grupy dokumentów - NIE daje bezhasłowego wejścia (patrz wyżej)
       };
-      grupy = [ "paperwork" ]; # dostęp do stałego, dwukierunkowego "/home/Paperwork"
+      groups = [ "paperwork" ]; # dostęp do stałego, dwukierunkowego "/home/Paperwork"
     }
     {
-      nazwa = "dev_user";
+      name = "dev_user";
       uid = 1005;
-      opis = "Kodowanie (projekty, uczelnia)";
-      rodzic = "Jacek";
-      szablon = "dev";
-      grupy = [ "projects" ]; # dostęp do /home/shared/Projects
+      description = "Kodowanie (projekty, uczelnia)";
+      parent = "Jacek";
+      template = "dev";
+      groups = [ "projects" ]; # dostęp do /home/shared/Projects
     }
     {
-      nazwa = "browse_user";
+      name = "browse_user";
       uid = 1006;
-      opis = "Główna przeglądarka (izolowana)";
-      rodzic = "Jacek";
-      szablon = "browse";
-      szablonArgs = {
-        skrotJacek = "BrowserDownloads";
+      description = "Główna przeglądarka (izolowana)";
+      parent = "Jacek";
+      template = "browse";
+      templateArgs = {
+        parentShortcut = "BrowserDownloads";
       };
     }
     {
-      nazwa = "vpn_user";
+      name = "vpn_user";
       uid = 1007;
-      opis = "Przeglądarka tylko przez VPN";
-      rodzic = "Jacek";
-      szablon = "vpn";
-      szablonArgs = {
-        skrotJacek = "VpnDownloads";
+      description = "Przeglądarka tylko przez VPN";
+      parent = "Jacek";
+      template = "vpn";
+      templateArgs = {
+        parentShortcut = "VpnDownloads";
       };
     }
     {
-      nazwa = "tor_user";
+      name = "tor_user";
       uid = 1008;
-      opis = "Tor Browser (VPN opcjonalny)";
-      rodzic = "Jacek";
-      szablon = "tor";
-      szablonArgs = {
-        skrotJacek = "TorDownloads";
+      description = "Tor Browser (VPN opcjonalny)";
+      parent = "Jacek";
+      template = "tor";
+      templateArgs = {
+        parentShortcut = "TorDownloads";
       };
     }
   ];
 
-  szablony = {
+  templates = {
     gry = import ./szablony/gry.nix;
     dev = import ./szablony/dev.nix;
     zerotrust = import ./szablony/zerotrust.nix;
@@ -143,16 +143,16 @@ let
     tor = import ./szablony/tor.nix;
   };
 
-  # zablokowane hasło + ukryte: każde konto, które ma `rodzic` ALBO `szablon` (nie musi mieć
-  # obu - claude ma tylko `rodzic`, secure_user celowo tylko `szablon`). Jedyne konto bez żadnego
+  # zablokowane hasło + ukryte: każde konto, które ma `parent` ALBO `template` (nie musi mieć
+  # obu - claude ma tylko `parent`, secure_user celowo tylko `template`). Jedyne konto bez żadnego
   # z nich to Jacek - prawdziwy człowiek, widoczny, z własnym hasłem.
-  jestPiaskownica = k: (k.szablon or null) != null || (k.rodzic or null) != null;
-  maSzablon = k: (k.szablon or null) != null; # trzeba zaimportować odpowiedni modules/users/szablony/*.nix
-  maRodzica = k: (k.rodzic or null) != null; # dostaje automatyczną, bezhasłową regułę wejścia
-  maDostepRodzica = k: (k.dostepRodzica or false) && maRodzica k;
+  isSandbox = k: (k.template or null) != null || (k.parent or null) != null;
+  hasTemplate = k: (k.template or null) != null; # trzeba zaimportować odpowiedni modules/users/szablony/*.nix
+  hasParent = k: (k.parent or null) != null; # dostaje automatyczną, bezhasłową regułę wejścia
+  hasParentAccess = k: (k.parentAccess or false) && hasParent k;
 
-  kontaZRodzicem = builtins.filter maRodzica konta;
-  kontaZDostepem = builtins.filter maDostepRodzica konta;
+  accountsWithParent = builtins.filter hasParent accounts;
+  accountsWithParentAccess = builtins.filter hasParentAccess accounts;
 in
 {
   users.mutableUsers = true;
@@ -166,29 +166,29 @@ in
 
   users.users = lib.listToAttrs (
     map (k: {
-      name = k.nazwa;
+      name = k.name;
       value = {
         isNormalUser = true;
         uid = k.uid;
-        description = k.opis or k.nazwa;
-        hashedPassword = lib.mkIf (jestPiaskownica k) "!";
-        extraGroups = (lib.optional (k.root or false) "wheel") ++ (k.grupy or [ ]);
+        description = k.description or k.name;
+        hashedPassword = lib.mkIf (isSandbox k) "!";
+        extraGroups = (lib.optional (k.root or false) "wheel") ++ (k.groups or [ ]);
         # podman bez roota - Jacek, niezależnie od żadnego szablonu (dev.nix ustawia to samo dla
         # swoich instancji, ale Jacek nie przechodzi przez żaden szablon).
-        autoSubUidGidRange = lib.mkIf (k.nazwa == "Jacek") true;
+        autoSubUidGidRange = lib.mkIf (k.name == "Jacek") true;
       };
-    }) konta
+    }) accounts
   );
 
-  # ego/machinectl bez hasła: TYLKO dla par (rodzic, konto) z listy. Tryb sudo ego ma flagę -H,
+  # ego/machinectl bez hasła: TYLKO dla par (parent, konto) z listy. Tryb sudo ego ma flagę -H,
   # której sudo-rs nie ma - stąd zawsze --machinectl, nigdy sudo-mode (patrz pliki szablonów).
   security.polkit.extraConfig = ''
     polkit.addRule(function(action, subject) {
       if (action.id == "org.freedesktop.machine1.host-shell" &&
           ${
             lib.concatMapStringsSep " ||\n          " (
-              k: ''(subject.user == "${k.rodzic}" && action.lookup("user") == "${k.nazwa}")''
-            ) kontaZRodzicem
+              k: ''(subject.user == "${k.parent}" && action.lookup("user") == "${k.name}")''
+            ) accountsWithParent
           }) {
         return polkit.Result.YES;
       }
@@ -196,17 +196,17 @@ in
   '';
 
   security.sudo-rs.extraRules = map (k: {
-    users = [ k.rodzic ];
-    runAs = k.nazwa;
+    users = [ k.parent ];
+    runAs = k.name;
     commands = [
       {
         command = "ALL";
         options = [ "NOPASSWD" ];
       }
     ];
-  }) kontaZRodzicem;
+  }) accountsWithParent;
 
-  services.displayManager.hiddenUsers = map (k: k.nazwa) (builtins.filter jestPiaskownica konta);
+  services.displayManager.hiddenUsers = map (k: k.name) (builtins.filter isSandbox accounts);
 
   systemd.tmpfiles.rules = [
     # Foldery wspólne Jacek ↔ claude (setgid + domyślne ACL: nowe pliki od razu dostępne dla obu).
@@ -235,14 +235,14 @@ in
     # dotyczy każdej przyszłej instancji - stąd tutaj, nie w szablony/gry.nix.
     "d /home/game_user 0700 game_user users -"
   ]
-  # Skróty w domu rodzica do kont z dostepRodzica (opcjonalne, patrz dostepRodzicaSkrot w
+  # Skróty w domu rodzica do kont z parentAccess (opcjonalne, patrz parentAccessShortcut w
   # nagłówku) - "L" bez "+": nie nadpisuje, jeśli coś już tam jest.
   ++ map (
     k:
-    "L /home/${k.rodzic}/${k.dostepRodzicaSkrot} - - - - ${k.dostepRodzicaSciezka or "/home/${k.nazwa}"}"
-  ) (builtins.filter (k: (k.dostepRodzicaSkrot or null) != null) kontaZDostepem);
+    "L /home/${k.parent}/${k.parentAccessShortcut} - - - - ${k.parentAccessPath or "/home/${k.name}"}"
+  ) (builtins.filter (k: (k.parentAccessShortcut or null) != null) accountsWithParentAccess);
 
-  # Pełny dostęp rodzica do całego katalogu podusera (opt-in, patrz `dostepRodzica` w nagłówku
+  # Pełny dostęp rodzica do całego katalogu podusera (opt-in, patrz `parentAccess` w nagłówku
   # pliku) - rekurencyjny ACL + domyślny ACL (nowe pliki dziedziczą automatycznie).
   #
   # To jest systemd ONESHOT, NIE activationScript (inaczej niż ClaudeFiles/admin-access.nix) -
@@ -255,8 +255,8 @@ in
   # (maska obcina uprawnienia nazwanego użytkownika) - złapane realnie w teście VM, nie teoria:
   # Jacek dostawał "Permission denied" mimo poprawnie wygenerowanego wpisu ACL. Uruchamiając to
   # PO systemd-tmpfiles-setup.service, nasz setfacl jest zawsze OSTATNIM słowem.
-  systemd.services.dostepRodzicowDoPoduserow = {
-    description = "Dostęp rodzica (ACL) do kont z dostepRodzica=true w konta.nix";
+  systemd.services.parentAccessForSubAccounts = {
+    description = "Dostęp rodzica (ACL) do kont z parentAccess=true w konta.nix";
     after = [
       "systemd-tmpfiles-setup.service"
       "local-fs.target"
@@ -265,33 +265,33 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
-      ExecStart = pkgs.writeShellScript "dostep-rodzicow-do-poduserow" (
+      ExecStart = pkgs.writeShellScript "parent-access-for-sub-accounts" (
         lib.concatMapStringsSep "\n" (
           k:
           let
-            sciezka = k.dostepRodzicaSciezka or "/home/${k.nazwa}";
+            path = k.parentAccessPath or "/home/${k.name}";
           in
           ''
-            ${pkgs.acl}/bin/setfacl -R -m "u:${k.rodzic}:rwX" -- "${sciezka}" \
-              || { echo "dostepRodzicowDoPoduserow: setfacl (${k.nazwa}) failed" >&2; exit 1; }
+            ${pkgs.acl}/bin/setfacl -R -m "u:${k.parent}:rwX" -- "${path}" \
+              || { echo "parentAccessForSubAccounts: setfacl (${k.name}) failed" >&2; exit 1; }
             # Domyślny ACL w DWIE strony: nie tylko rodzic widzi nowe pliki, też odwrotnie - jeśli
-            # rodzic sam coś tam dogra (np. ręcznie dorzuci plik instalacyjny gry), żeby ${k.nazwa}
+            # rodzic sam coś tam dogra (np. ręcznie dorzuci plik instalacyjny gry), żeby ${k.name}
             # (właściciel katalogu) mógł to przeczytać/zmodyfikować - inaczej plik Jacka byłby
             # widoczny tylko dla niego, bo właścicielem nowego pliku jest jego twórca, nie katalog.
-            ${pkgs.acl}/bin/setfacl -d -m "u:${k.rodzic}:rwX,u:${k.nazwa}:rwX" -- "${sciezka}" \
-              || { echo "dostepRodzicowDoPoduserow: default setfacl (${k.nazwa}) failed" >&2; exit 1; }
+            ${pkgs.acl}/bin/setfacl -d -m "u:${k.parent}:rwX,u:${k.name}:rwX" -- "${path}" \
+              || { echo "parentAccessForSubAccounts: default setfacl (${k.name}) failed" >&2; exit 1; }
           ''
-        ) kontaZDostepem
+        ) accountsWithParentAccess
       );
     };
   };
 
   imports = lib.concatMap (
     k:
-    lib.optional (maSzablon k) (
-      szablony.${k.szablon} (
-        { nazwa = k.nazwa; rodzic = k.rodzic or null; } // (k.szablonArgs or { })
+    lib.optional (hasTemplate k) (
+      templates.${k.template} (
+        { name = k.name; parent = k.parent or null; } // (k.templateArgs or { })
       )
     )
-  ) konta;
+  ) accounts;
 }

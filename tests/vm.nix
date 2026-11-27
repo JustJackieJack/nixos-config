@@ -60,7 +60,7 @@ pkgs.testers.runNixOSTest {
         # Druga instancja szablonu "gry" (tylko w teście) - dowód, że szablon faktycznie działa
         # dla więcej niż jednej instancji, nie tylko teoretycznie. "rodzic = Jacek" bo żadnego
         # realnego drugiego człowieka jeszcze nie ma.
-        (import ../modules/users/szablony/gry.nix { nazwa = "dziecko-games"; })
+        (import ../modules/users/szablony/gry.nix { name = "dziecko-games"; })
       ];
 
       networking.hostName = "pc";
@@ -137,7 +137,7 @@ pkgs.testers.runNixOSTest {
           assert out == [], f"nieudane usługi: {out}"
 
       with subtest("użytkownicy, grupy, foldery"):
-          for u, n in [("Jacek", 1000), ("claude", 1001), ("game_user", 1002), ("zeroroot", 1003), ("straznik", 399)]:
+          for u, n in [("Jacek", 1000), ("claude", 1001), ("game_user", 1002), ("zeroroot", 1003), ("guardian", 399)]:
               assert pc.succeed(f"id -u {u}").strip() == str(n), u
           pc.succeed("id -nG Jacek | grep -qw wheel")
           pc.succeed("id -nG claude | grep -qw systemd-journal")
@@ -156,7 +156,7 @@ pkgs.testers.runNixOSTest {
           # usługa jednorazowa (nie activationScript - patrz komentarz w konta.nix), musi
           # dokończyć PRZED sprawdzeniem ACL - wantedBy=multi-user.target nie gwarantuje tego
           # samo z siebie (to Wants, nie blokująca zależność)
-          pc.wait_for_unit("dostepRodzicowDoPoduserow.service")
+          pc.wait_for_unit("parentAccessForSubAccounts.service")
           # ACL, nie bit grupy - mode zostaje 0700, dostęp Jacka idzie przez wpis ACL
           pc.succeed(jako("game_user", "echo zapis-gry > /mnt/games/plik_gry.txt"))
           assert pc.succeed(jacek("cat /mnt/games/plik_gry.txt")).strip() == "zapis-gry"
@@ -165,9 +165,9 @@ pkgs.testers.runNixOSTest {
           pc.succeed(jako("zeroroot", "echo zapis-zeroroot > /home/zeroroot/plik.txt"))
           assert pc.succeed(jacek("cat /home/zeroroot/plik.txt")).strip() == "zapis-zeroroot"
           # skróty w domu Jacka
-          assert pc.succeed("readlink /home/Jacek/Gry").strip() == "/mnt/games"
+          assert pc.succeed("readlink /home/Jacek/Games").strip() == "/mnt/games"
           assert pc.succeed("readlink /home/Jacek/Zeroroot").strip() == "/home/zeroroot"
-          assert pc.succeed(jacek("cat ~/Gry/plik_gry.txt")).strip() == "zapis-gry"
+          assert pc.succeed(jacek("cat ~/Games/plik_gry.txt")).strip() == "zapis-gry"
           # inne konta nadal bez dostępu - to jest TYLKO dla rodzica (Jacka)
           for u in ["claude", "dev_user", "browse_user", "secure_user"]:
               pc.fail(jako(u, "ls /mnt/games"))
@@ -266,8 +266,8 @@ pkgs.testers.runNixOSTest {
               assert pc.succeed(jako("claude", f"cat {cel}")).strip() == f"dane-{u}", u
           # profil Firefoksa (secure_user, browse_user) i .ssh (dev_user) - chronione nawet
           # jako skonfigurowane, dozwolone konta źródłowe (ta sama zasada co .ssh/.mozilla Jacka)
-          pc.fail(jacek(f"{share} add view secure_user claude /home/secure_user/profil-firefox/user.js 10s"))
-          pc.fail(jacek(f"{share} add view browse_user claude /home/browse_user/profil-firefox/user.js 10s"))
+          pc.fail(jacek(f"{share} add view secure_user claude /home/secure_user/firefox-profile/user.js 10s"))
+          pc.fail(jacek(f"{share} add view browse_user claude /home/browse_user/firefox-profile/user.js 10s"))
           pc.fail(jacek(f"{share} add view dev_user claude /home/dev_user/.ssh/config.d/ssh-agent.conf 10s"))
 
       with subtest("old Polish command names no longer exist"):
@@ -355,10 +355,10 @@ pkgs.testers.runNixOSTest {
           # ten sam nix jako Jacek → odmowa
           pc.fail(jako("Jacek", f"{nix} http://nas/plik2"))
           # strażnik (vulnix) → dozwolony
-          pc.succeed(jako("straznik", "curl -sf -m 8 http://nas > /dev/null"))
+          pc.succeed(jako("guardian", "curl -sf -m 8 http://nas > /dev/null"))
 
       with subtest("strażnik ma dostęp do demona Nix (vulnix), game_user nie"):
-          pc.succeed(jako("straznik", "nix-store -qR /run/current-system > /dev/null"))
+          pc.succeed(jako("guardian", "nix-store -qR /run/current-system > /dev/null"))
           pc.fail(jako("game_user", "nix-store -qR /run/current-system > /dev/null"))
 
       with subtest("secure_user: osobne konto, start tylko z hasłem, lista domen, utwardzony Firefox"):
@@ -385,10 +385,10 @@ pkgs.testers.runNixOSTest {
           pc.succeed("grep -q '\"data\":\"1000\"' /var/lib/opensnitch/rules/020-firefox-blokada-jacka.json")
           pc.succeed("grep -q '\"action\":\"reject\"' /var/lib/opensnitch/rules/020-firefox-blokada-jacka.json")
           # lista domen = stała część (urzędy) + dopisane w hoście/teście (nie zastępuje)
-          pc.succeed("grep -q 'gov\\\\\\\\.pl' /var/lib/opensnitch/rules/030-secure_user-domeny.json")
+          pc.succeed("grep -q 'gov\\\\\\\\.pl' /var/lib/opensnitch/rules/030-secure_user-domains.json")
           # utwardzony profil Firefoksa: user.js stosowany przy starcie (Firefox zapisuje go do prefs.js)
-          pc.execute(jako("secure_user", "timeout 180 firefox --headless --new-instance --profile /home/secure_user/profil-firefox --screenshot /tmp/ff.png about:blank"))
-          prefs = pc.succeed("cat /home/secure_user/profil-firefox/prefs.js")
+          pc.execute(jako("secure_user", "timeout 180 firefox --headless --new-instance --profile /home/secure_user/firefox-profile --screenshot /tmp/ff.png about:blank"))
+          prefs = pc.succeed("cat /home/secure_user/firefox-profile/prefs.js")
           for wpis in ['"dom.security.https_only_mode", true', '"signon.rememberSignons", false',
                        '"network.IDN_show_punycode", true', '"xpinstall.enabled", false',
                        '"media.peerconnection.enabled", false', '"browser.contentblocking.category", "strict"']:
@@ -432,7 +432,7 @@ pkgs.testers.runNixOSTest {
           # Podman rootless (subuid/subgid, bez roota) - bez sieci: samo utworzenie user namespace
           assert pc.succeed(jako("dev_user", "podman unshare id -u")).strip() == "0"
           # OpenSnitch: domeny startowe (GitHub itp.) wczytane
-          pc.succeed("grep -q 'github\\\\\\\\.com' /var/lib/opensnitch/rules/040-dev_user-domeny.json")
+          pc.succeed("grep -q 'github\\\\\\\\.com' /var/lib/opensnitch/rules/040-dev_user-domains.json")
 
       with subtest("dev_user: współdzielony ssh-agent Jacka (bez własnych kluczy w dev_user)"):
           # ~/.ssh/config dev_user wskazuje na agenta Jacka, nie na własny klucz
@@ -440,7 +440,7 @@ pkgs.testers.runNixOSTest {
           pc.succeed("grep -qxF 'Include config.d/*.conf' /home/dev_user/.ssh/config")
           # Prawdziwy agent jest wantedBy=graphical-session.target - w tej headless maszynie
           # testowej ten target nigdy nie jest osiągnięty (brak prawdziwej sesji Plasma), tak samo
-          # jak dla opensnitch-ui/access-mcp-claude - stąd ręczny start (jak przy straznik-* niżej
+          # jak dla opensnitch-ui/access-mcp-claude - stąd ręczny start (jak przy guardian-* niżej
           # w pliku). Gniazdo proxy (.socket, wantedBy=sockets.target) powinno wystartować samo,
           # ale startujemy jawnie dla pewności/powtarzalności testu.
           pc.succeed(jacek("systemctl --user start dev_user-ssh-agent-real.service dev_user-ssh-agent.socket"))
@@ -463,7 +463,7 @@ pkgs.testers.runNixOSTest {
           pc.fail(jako("browse_user", "ls /home/Jacek"))
           pc.fail(jako("browse_user", "ls /home/shared"))
           # profil Firefoksa: user.js wskazuje pobieranie na wspólny folder
-          pc.succeed("grep -q 'browser.download.dir\", \"/home/browse_user-downloads' /home/browse_user/profil-firefox/user.js")
+          pc.succeed("grep -q 'browser.download.dir\", \"/home/browse_user-downloads' /home/browse_user/firefox-profile/user.js")
           # folder pobierania: dwukierunkowy (Jacek i browse_user), skrót w domu Jacka
           pc.succeed(jacek("echo z-sieci > /home/browse_user-downloads/plik-z-necu.txt"))
           pc.succeed("test -e /home/Jacek/BrowserDownloads/plik-z-necu.txt")  # to jest symlink na ten sam katalog
@@ -602,14 +602,14 @@ pkgs.testers.runNixOSTest {
           pc.fail("modprobe bluetooth")
           pc.succeed("grep -q 'intel_iommu=on' /proc/cmdline && grep -q slab_nomerge /proc/cmdline")
           pc.succeed("systemd-analyze cat-config systemd/coredump.conf | grep -q 'Storage=none'")
-          pc.succeed("auditctl -l | grep -q jako-root")
+          pc.succeed("auditctl -l | grep -q as-root")
           pc.succeed("resolvectl status | grep -qi -- '-LLMNR'")
 
       with subtest("strażnik plików startowych"):
-          pc.succeed(jacek("echo a > ~/.bashrc && systemctl --user start straznik-pliki-startowe"))
-          pc.succeed(jacek("echo b >> ~/.bashrc && systemctl --user start straznik-pliki-startowe"))
-          pc.succeed("journalctl -t straznik | grep -q 'Zmiana w plikach startowych'")
-          pc.succeed(jacek("systemctl --user start straznik-miejsce"))
+          pc.succeed(jacek("echo a > ~/.bashrc && systemctl --user start guardian-startup-files"))
+          pc.succeed(jacek("echo b >> ~/.bashrc && systemctl --user start guardian-startup-files"))
+          pc.succeed("journalctl -t guardian | grep -q 'Zmiana w plikach startowych'")
+          pc.succeed(jacek("systemctl --user start guardian-disk-space"))
 
       with subtest("Lynis i weryfikacja sklepu startują"):
           pc.succeed("systemctl start lynis")

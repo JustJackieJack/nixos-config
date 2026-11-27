@@ -18,12 +18,12 @@
 #     samą stronę - rodzic wrzuca tam plik, który chce wysłać przez stronę (okienko wyboru plików
 #     w Firefoksie domyślnie otwiera się w katalogu pobierania).
 {
-  nazwa,
-  rodzic ? null,
-  folderPobierania ? "/home/${nazwa}-downloads",
-  # wygodny skrót w domu rodzica do folderu pobierania - opcjonalny, działa tylko gdy `rodzic`
-  # podany (tak jak skrotJacek w bank.nix).
-  skrotJacek ? null,
+  name,
+  parent ? null,
+  downloadDir ? "/home/${name}-downloads",
+  # wygodny skrót w domu rodzica do folderu pobierania - opcjonalny, działa tylko gdy `parent`
+  # podany (tak jak parentShortcut w bank.nix).
+  parentShortcut ? null,
   ...
 }:
 {
@@ -33,33 +33,33 @@
   ...
 }:
 let
-  dom = "/home/${nazwa}";
-  profil = "${dom}/profil-firefox";
-  grupaPobierania = "${nazwa}-downloads";
+  homeDir = "/home/${name}";
+  profileDir = "${homeDir}/firefox-profile";
+  downloadGroup = "${name}-downloads";
 
   # Lżejsze niż bank.nix - to ma być zwykła, codzienna przeglądarka. DisableTelemetry/
   # DisableFirefoxStudies/DisablePocket już globalnie w desktop.nix (programs.firefox.policies).
-  ustawienia = {
+  settings = {
     "dom.security.https_only_mode" = true;
     "browser.contentblocking.category" = "strict"; # wbudowana ochrona przed trackerami/3rd-party
     "network.IDN_show_punycode" = true; # przeciw phishingowi przez homoglify w domenach
     "browser.download.useDownloadDir" = true;
     "browser.download.folderList" = 2;
-    "browser.download.dir" = folderPobierania;
+    "browser.download.dir" = downloadDir;
     "browser.startup.homepage" = "about:blank";
     "datareporting.policy.dataSubmissionEnabled" = false;
   };
-  userJs = pkgs.writeText "${nazwa}-user.js" (
+  userJs = pkgs.writeText "${name}-user.js" (
     lib.concatStrings (
-      lib.mapAttrsToList (n: v: "user_pref(${builtins.toJSON n}, ${builtins.toJSON v});\n") ustawienia
+      lib.mapAttrsToList (n: v: "user_pref(${builtins.toJSON n}, ${builtins.toJSON v});\n") settings
     )
   );
 
-  skrot = pkgs.makeDesktopItem {
-    name = "${nazwa}-firefox";
-    desktopName = "Firefox (${nazwa})";
+  desktopItem = pkgs.makeDesktopItem {
+    name = "${name}-firefox";
+    desktopName = "Firefox (${name})";
     comment = "Główna przeglądarka na osobnym, izolowanym koncie";
-    exec = "${pkgs.ego}/bin/ego --machinectl --user=${nazwa} firefox --new-instance --profile ${profil}";
+    exec = "${pkgs.ego}/bin/ego --machinectl --user=${name} firefox --new-instance --profile ${profileDir}";
     icon = "firefox";
     categories = [ "Network" ];
   };
@@ -67,30 +67,30 @@ in
 {
   config = {
     users.groups = {
-      ${grupaPobierania} = { };
+      ${downloadGroup} = { };
     };
     users.users = {
-      ${nazwa}.extraGroups = [ grupaPobierania ];
-    } // lib.optionalAttrs (rodzic != null) {
-      ${rodzic}.extraGroups = [ grupaPobierania ];
+      ${name}.extraGroups = [ downloadGroup ];
+    } // lib.optionalAttrs (parent != null) {
+      ${parent}.extraGroups = [ downloadGroup ];
     };
 
     systemd.tmpfiles.rules = [
-      "d ${profil} 0700 ${nazwa} users -"
-      "L+ ${profil}/user.js - - - - ${userJs}"
-      "d ${folderPobierania} 2770 ${nazwa} ${grupaPobierania} -"
-      "a+ ${folderPobierania} - - - - default:group:${grupaPobierania}:rwx,group:${grupaPobierania}:rwx"
-    ] ++ lib.optional (skrotJacek != null && rodzic != null) "L /home/${rodzic}/${skrotJacek} - - - - ${folderPobierania}";
+      "d ${profileDir} 0700 ${name} users -"
+      "L+ ${profileDir}/user.js - - - - ${userJs}"
+      "d ${downloadDir} 2770 ${name} ${downloadGroup} -"
+      "a+ ${downloadDir} - - - - default:group:${downloadGroup}:rwx,group:${downloadGroup}:rwx"
+    ] ++ lib.optional (parentShortcut != null && parent != null) "L /home/${parent}/${parentShortcut} - - - - ${downloadDir}";
 
-    environment.systemPackages = [ skrot ];
+    environment.systemPackages = [ desktopItem ];
 
-    # Pełny dostęp do sieci dla TEGO konta (jak "020-firefox" dla Jacka w opensnitch.nix) - bez
-    # tego każda nowa strona pytałaby okienkiem OpenSnitch, co dla głównej przeglądarki byłoby
-    # nie do zniesienia. Klucz po UID + ścieżce (nie tylko ścieżce) - inaczej reguła omijałaby
-    # też listę domen secure_user (ten sam plik binarny Firefoksa, inne konto).
+    # Pełny dostęp do sieci dla TEGO konta (jak "020-firefox-blokada-jacka" w opensnitch.nix dla
+    # porównania) - bez tego każda nowa strona pytałaby okienkiem OpenSnitch, co dla głównej
+    # przeglądarki byłoby nie do zniesienia. Klucz po UID + ścieżce (nie tylko ścieżce) - inaczej
+    # reguła omijałaby też listę domen secure_user (ten sam plik binarny Firefoksa, inne konto).
     services.opensnitch.rules = lib.mkIf config.moje.opensnitch.enable {
-      "025-${nazwa}-firefox" = {
-        name = "025-${nazwa}-firefox";
+      "025-${name}-firefox" = {
+        name = "025-${name}-firefox";
         enabled = true;
         action = "allow";
         duration = "always";
@@ -110,13 +110,13 @@ in
               type = "simple";
               operand = "user.id";
               sensitive = false;
-              data = toString config.users.users.${nazwa}.uid;
+              data = toString config.users.users.${name}.uid;
             }
           ];
         };
       };
     };
 
-    services.clamav.daemon.settings.OnAccessIncludePath = [ folderPobierania ];
+    services.clamav.daemon.settings.OnAccessIncludePath = [ downloadDir ];
   };
 }

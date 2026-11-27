@@ -12,7 +12,7 @@ let
   cfg = config.moje.hardening;
 
   # Moduły, których się nie da załadować (nie tylko blacklist – blacklist blokuje tylko autoload).
-  zablokowaneModuly = [
+  blockedModules = [
     # rzadkie protokoły sieciowe (historia dziur)
     "dccp"
     "sctp"
@@ -94,10 +94,10 @@ in
         "debugfs=off"
       ];
 
-      boot.blacklistedKernelModules = zablokowaneModuly;
+      boot.blacklistedKernelModules = blockedModules;
       boot.extraModprobeConfig = lib.concatMapStrings (
         m: "install ${m} ${pkgs.coreutils}/bin/false\n"
-      ) zablokowaneModuly;
+      ) blockedModules;
 
       # Bez kexec (podmiana działającego jądra w locie) i bez hibernacji.
       security.protectKernelImage = true;

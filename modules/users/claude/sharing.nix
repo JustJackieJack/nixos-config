@@ -67,7 +67,7 @@ let
         "/home/secure_user"
         "/home/secure-documents"
       ];
-      protected = [ "profil-firefox" ];
+      protected = [ "firefox-profile" ];
     };
     dev_user = {
       uid = 1005;
@@ -80,7 +80,7 @@ let
         "/home/browse_user"
         "/home/browse_user-downloads"
       ];
-      protected = [ "profil-firefox" ];
+      protected = [ "firefox-profile" ];
     };
   };
   # Accounts that may be given something (recipients).

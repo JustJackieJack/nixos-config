@@ -6,7 +6,7 @@ usunięcia LUKS - szczegóły tam). Uruchamiać po każdej zmianie modułów (ka
 
 | Zestaw | Polecenie | Co sprawdza |
 |---|---|---|
-| system | `nix build .#checks.x86_64-linux.vm -L` | 42 grupy: usługi, użytkownicy, hidepid, polkit/ego, sudo-rs, foldery wspólne, dostepRodzica (game_user/zeroroot), claude-code tylko przez claude-session/-home, claude-view/-edit/-copy/-revoke (z atakami), claude-share (wszystkie konta jako źródło), request_command, kde-sync, szablon gry (druga instancja), Paperwork + secure-give/-revoke, zapora (też IPv6), zeroroot bez sieci, OpenSnitch (ścieżki, reguły, awaria demona), secure_user, dev_user (+ wspólny ssh-agent), browse_user, vpn_user/tor_user (przygotowane, bez pliku .wg), sops, restic (kopia + ODTWORZENIE), NAS, ClamAV, hardening, eskalacja, tryb awaryjny (przełączenie), restart |
+| system | `nix build .#checks.x86_64-linux.vm -L` | 42 grupy: usługi, użytkownicy, hidepid, polkit/ego, sudo-rs, foldery wspólne, parentAccess (game_user/zeroroot), claude-code tylko przez claude-session/-home, claude-view/-edit/-copy/-revoke (z atakami), claude-share (wszystkie konta jako źródło), request_command, kde-sync, szablon gry (druga instancja), Paperwork + secure-give/-revoke, zapora (też IPv6), zeroroot bez sieci, OpenSnitch (ścieżki, reguły, awaria demona), secure_user, dev_user (+ wspólny ssh-agent), browse_user, vpn_user/tor_user (przygotowane, bez pliku .wg), sops, restic (kopia + ODTWORZENIE), NAS, ClamAV, hardening, eskalacja, tryb awaryjny (przełączenie), restart |
 | pulpit | `nix build .#checks.x86_64-linux.pulpit -L` | Plasma Wayland, okno OpenSnitch, strażnik w sesji, menu, ego (okno + dźwięk jako game_user), piaskownica zeroroot |
 | dyski | `nix build .#checks.x86_64-linux.dyski -L` | disko (GPT, btrfs, ext4), instalacja, rozruch, podwoluminy, wspólne wolne miejsce, snapper, scrub, wpis awaryjny |
 
@@ -35,7 +35,7 @@ Gdy DNS w homelabie nie działa: dodać `--option substitute false` (o ile paczk
     (shared/proc/systemd-journal, video/render), cały blok `systemd.tmpfiles.rules` dla
     `/home/shared/...`, `users.mutableUsers`, `autoSubUidGidRange` dla Jacka, pole `description`.
     Jedna celowa (nie błąd) zmiana zachowania: `sudo -u <konto>` jest teraz symetryczne dla
-    każdego konta z `rodzic` (dawniej tylko `claude` miało to oprócz ego) - test zaktualizowany,
+    każdego konta z `parent` (dawniej tylko `claude` miało to oprócz ego) - test zaktualizowany,
     nie jest to nowe uprawnienie (Jacek i tak miał pełny dostęp przez ego).
 11. Zmiana nazwy `wspolne`→`shared` (2026-11-27) + izolacja grup wymiany/dokumentów per-instancja
     szablonów (`<nazwa>-exchange`, `<nazwa>-documents` zamiast jednej, globalnie współdzielonej
@@ -108,10 +108,10 @@ Gdy DNS w homelabie nie działa: dodać `--option substitute false` (o ile paczk
     `moje.claude.shareSourceAccounts` - nowej, odczytywalnej z `sharing.nix` liście), okienko
     `kdialog` zawsze jawnie nazywa, CZYJE pliki są proszone - Jacek nigdy nie zatwierdza
     "nieoznaczonej" ścieżki. `sourceAccounts` w `sharing.nix` rozszerzony o `secure_user`
-    (+ `/home/secure-documents`), `dev_user`, `browse_user` - każde z własnym `profil-firefox`/
+    (+ `/home/secure-documents`), `dev_user`, `browse_user` - każde z własnym `firefox-profile`/
     `.ssh` na liście chronionych podścieżek (ta sama zasada co `.ssh`/`.mozilla` Jacka - bycie
     dozwolonym źródłem nie znaczy "bez wyjątków", tylko "bez domyślnego całkowitego zakazu").
-16. `dostepRodzica` włączony dla `game_user` (ścieżka `/mnt/games`, skrót `~/Gry`) i `zeroroot`
+16. `parentAccess` włączony dla `game_user` (ścieżka `/mnt/games`, skrót `~/Games`) i `zeroroot`
     (`/home/zeroroot`, skrót `~/Zeroroot`) - 2026-11-27, decyzja użytkownika: potrzebuje stałego,
     wygodnego dostępu do plików tych kont bez `sudo`/`ego` przy każdej operacji. Mechanizm
     sam istniał od refaktoru (punkt 10/13), ale nigdy nie był użyty - po włączeniu złapane TRZY
@@ -169,10 +169,26 @@ Gdy DNS w homelabie nie działa: dodać `--option substitute false` (o ile paczk
     uprawnienia do plików - dokładnie to, przed czym ma chronić całe to konto). `claude-session`/
     `claude-home` działają bez zmian - wołają binarkę po pełnej ścieżce `/nix/store`, nie przez
     PATH.
+19. Nazwy wewnętrzne w kodzie Nix (`nazwa`→`name`, `rodzic`→`parent`, `dom`→`homeDir`,
+    `profil`→`profileDir`, `ustawienia`→`settings`, `skrot`→`desktopItem`, `konta`→`accounts`,
+    `szablony`→`templates`, `dostepRodzica`→`parentAccess` i kilkanaście innych) - przebudowane
+    na angielski w `konta.nix`, wszystkich `szablony/*.nix`, `kde-sync.nix`, `vpn-tunnel.nix`,
+    `hardening.nix`, `monitoring.nix`, `opensnitch.nix` (2026-11-27/28, decyzja użytkownika po
+    audycie nazewnictwa - te pliki były jedyną niekonsekwencją wobec `users/claude/*`, które od
+    wcześniejszej sesji już miały angielskie nazwy wewnętrzne). Przy tej okazji też: konto/komendy
+    `straznik`→`guardian` (prawdziwa nazwa konta/usługi, nie tylko zmienna Nix - była
+    niekonsekwentna wobec reszty angielskich nazw kont), `profil-firefox`→`firefox-profile`
+    (katalog na dysku, nie tylko zmienna), `"030-…-domeny"`/`"040-…-domeny"`→`"…-domains"` (nazwy
+    reguł OpenSnitch), `nix-store-weryfikacja`→`nix-store-verification`, audit keys
+    `jako-root`/`moduly`→`as-root`/`modules`, sops `vpn/klucz-prywatny`→`vpn/private-key`. Nix sam
+    wyłapał każde przeoczone odwołanie (błąd "undefined variable" przy buildzie) - jedyne dwa
+    realne przeoczenia znalezione tą metodą: wywołanie `szablony/gry.nix` wprost w `tests/vm.nix`
+    (`{ nazwa = "dziecko-games"; }`) i `pc.wait_for_unit("dostepRodzicowDoPoduserow.service")` -
+    oba naprawione. Test zielony (42/42) bez żadnej innej poprawki.
 
 **Stan**: refaktor `konta.nix`/szablonów + zmiana nazwy `shared` + hybryda `secure_user` +
 `browse_user` + usunięcie Firefoksa Jacka + czyszczenie i rozszerzenie access-mcp +
-`dostepRodzica` dla `game_user`/`zeroroot` + `vpn_user`/`tor_user` (przygotowane pod WireGuard) +
+`parentAccess` dla `game_user`/`zeroroot` + `vpn_user`/`tor_user` (przygotowane pod WireGuard) +
 blokada bezpośredniego `claude` - zakończone i w pełni zielone (42/42 podtestów, w tym dowód
 reużywalności szablonu „gry” na drugiej instancji `dziecko-games`). Usunięcie LUKS - config
 poprawny i buduje się, test `dyski` odkrył nowy (niezależny) problem z bootloaderem w testowej

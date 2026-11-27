@@ -10,10 +10,10 @@
 #  3. folder pobierania - WŁASNY, OSOBNY od browse_user (i od tor_user) - decyzja użytkownika:
 #     nie mieszać zwykłego przeglądania z tym przez VPN.
 {
-  nazwa,
-  rodzic ? null,
-  folderPobierania ? "/home/${nazwa}-downloads",
-  skrotJacek ? null,
+  name,
+  parent ? null,
+  downloadDir ? "/home/${name}-downloads",
+  parentShortcut ? null,
   ...
 }:
 {
@@ -23,34 +23,34 @@
   ...
 }:
 let
-  dom = "/home/${nazwa}";
-  profil = "${dom}/profil-firefox";
-  grupaPobierania = "${nazwa}-downloads";
-  uid = toString config.users.users.${nazwa}.uid;
-  interfejs = config.moje.vpn.interfejs;
-  tabela = toString config.moje.vpn.tabela;
+  homeDir = "/home/${name}";
+  profileDir = "${homeDir}/firefox-profile";
+  downloadGroup = "${name}-downloads";
+  uid = toString config.users.users.${name}.uid;
+  tunnelInterface = config.moje.vpn.interface;
+  tunnelTable = toString config.moje.vpn.table;
 
-  ustawienia = {
+  settings = {
     "dom.security.https_only_mode" = true;
     "browser.contentblocking.category" = "strict";
     "network.IDN_show_punycode" = true;
     "browser.download.useDownloadDir" = true;
     "browser.download.folderList" = 2;
-    "browser.download.dir" = folderPobierania;
+    "browser.download.dir" = downloadDir;
     "browser.startup.homepage" = "about:blank";
     "datareporting.policy.dataSubmissionEnabled" = false;
   };
-  userJs = pkgs.writeText "${nazwa}-user.js" (
+  userJs = pkgs.writeText "${name}-user.js" (
     lib.concatStrings (
-      lib.mapAttrsToList (n: v: "user_pref(${builtins.toJSON n}, ${builtins.toJSON v});\n") ustawienia
+      lib.mapAttrsToList (n: v: "user_pref(${builtins.toJSON n}, ${builtins.toJSON v});\n") settings
     )
   );
 
-  skrot = pkgs.makeDesktopItem {
-    name = "${nazwa}-firefox";
-    desktopName = "Firefox przez VPN (${nazwa})";
+  desktopItem = pkgs.makeDesktopItem {
+    name = "${name}-firefox";
+    desktopName = "Firefox przez VPN (${name})";
     comment = "Przeglądarka, która ma sieć TYLKO przez tunel WireGuard";
-    exec = "${pkgs.ego}/bin/ego --machinectl --user=${nazwa} firefox --new-instance --profile ${profil}";
+    exec = "${pkgs.ego}/bin/ego --machinectl --user=${name} firefox --new-instance --profile ${profileDir}";
     icon = "firefox";
     categories = [ "Network" ];
   };
@@ -58,55 +58,56 @@ in
 {
   config = {
     users.groups = {
-      ${grupaPobierania} = { };
+      ${downloadGroup} = { };
     };
     users.users = {
-      ${nazwa}.extraGroups = [ grupaPobierania ];
-    } // lib.optionalAttrs (rodzic != null) {
-      ${rodzic}.extraGroups = [ grupaPobierania ];
+      ${name}.extraGroups = [ downloadGroup ];
+    } // lib.optionalAttrs (parent != null) {
+      ${parent}.extraGroups = [ downloadGroup ];
     };
 
     systemd.tmpfiles.rules = [
-      "d ${profil} 0700 ${nazwa} users -"
-      "L+ ${profil}/user.js - - - - ${userJs}"
-      "d ${folderPobierania} 2770 ${nazwa} ${grupaPobierania} -"
-      "a+ ${folderPobierania} - - - - default:group:${grupaPobierania}:rwx,group:${grupaPobierania}:rwx"
-    ] ++ lib.optional (skrotJacek != null && rodzic != null) "L /home/${rodzic}/${skrotJacek} - - - - ${folderPobierania}";
+      "d ${profileDir} 0700 ${name} users -"
+      "L+ ${profileDir}/user.js - - - - ${userJs}"
+      "d ${downloadDir} 2770 ${name} ${downloadGroup} -"
+      "a+ ${downloadDir} - - - - default:group:${downloadGroup}:rwx,group:${downloadGroup}:rwx"
+    ] ++ lib.optional (parentShortcut != null && parent != null) "L /home/${parent}/${parentShortcut} - - - - ${downloadDir}";
 
-    environment.systemPackages = [ skrot ];
+    environment.systemPackages = [ desktopItem ];
 
     # Kill switch: zablokuj WSZYSTKO dla tego UID, co nie idzie przez interfejs tunelu. Działa
     # NIEZALEŻNIE od tego, czy moje.vpn.enable jest dziś true czy false - gdy tunel nie istnieje,
     # ta reguła i tak odrzuca wszystko (nie ma czym "przejść"), czyli bezpieczny stan domyślny.
-    networking.nftables.tables."${nazwa}-kill-switch" = {
+    networking.nftables.tables."${name}-kill-switch" = {
       family = "inet";
       content = ''
         chain output {
           type filter hook output priority filter; policy accept;
-          meta skuid ${uid} oifname != "${interfejs}" limit rate 5/minute log prefix "${nazwa}-kill-switch: "
-          meta skuid ${uid} oifname != "${interfejs}" reject
+          meta skuid ${uid} oifname != "${tunnelInterface}" limit rate 5/minute log prefix "${name}-kill-switch: "
+          meta skuid ${uid} oifname != "${tunnelInterface}" reject
         }
       '';
     };
 
     # Ruch tego UID-u ZAWSZE kierowany do tabeli tunelu (w odróżnieniu od tor_user, który ma to
-    # jako przełącznik) - usługa, nie activationScript (ta sama lekcja co dostepRodzicowDoPoduserow
-    # w konta.nix: ip rule musi istnieć niezależnie od tego, co jeszcze nie wstało przy starcie).
-    systemd.services."${nazwa}-routing" = {
-      description = "Kieruj ruch konta ${nazwa} do tabeli tunelu VPN (moje.vpn.tabela)";
+    # jako przełącznik) - usługa, nie activationScript (ta sama lekcja co
+    # parentAccessForSubAccounts w konta.nix: ip rule musi istnieć niezależnie od tego, co jeszcze
+    # nie wstało przy starcie).
+    systemd.services."${name}-routing" = {
+      description = "Kieruj ruch konta ${name} do tabeli tunelu VPN (moje.vpn.table)";
       after = [ "network-pre.target" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = "${pkgs.iproute2}/bin/ip rule add uidrange ${uid}-${uid} lookup ${tabela} priority 100";
-        ExecStop = "${pkgs.iproute2}/bin/ip rule del uidrange ${uid}-${uid} lookup ${tabela} priority 100";
+        ExecStart = "${pkgs.iproute2}/bin/ip rule add uidrange ${uid}-${uid} lookup ${tunnelTable} priority 100";
+        ExecStop = "${pkgs.iproute2}/bin/ip rule del uidrange ${uid}-${uid} lookup ${tunnelTable} priority 100";
       };
     };
 
     services.opensnitch.rules = lib.mkIf config.moje.opensnitch.enable {
-      "026-${nazwa}-firefox" = {
-        name = "026-${nazwa}-firefox";
+      "026-${name}-firefox" = {
+        name = "026-${name}-firefox";
         enabled = true;
         action = "allow";
         duration = "always";
@@ -133,6 +134,6 @@ in
       };
     };
 
-    services.clamav.daemon.settings.OnAccessIncludePath = [ folderPobierania ];
+    services.clamav.daemon.settings.OnAccessIncludePath = [ downloadDir ];
   };
 }

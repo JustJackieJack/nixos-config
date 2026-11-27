@@ -2,12 +2,12 @@
 #   ClamAV (skan przy dostępie: Downloads, zeroroot), auditd, Lynis (co miesiąc),
 #   nix store verify (co tydzień: czy nikt nie zmienił plików w /nix/store),
 #   vulnix (co tydzień: znane CVE w zainstalowanych paczkach),
-#   strażnik plików startowych i miejsca na dysku (powiadomienia na pulpicie Jacka).
+#   guardian plików startowych i miejsca na dysku (powiadomienia na pulpicie Jacka).
 # Wyniki: journalctl -u <usługa>. claude (audytor) czyta dziennik.
 { config, pkgs, ... }:
 let
-  plikiStartowe = pkgs.writeShellApplication {
-    name = "straznik-pliki-startowe";
+  startupFilesWatcher = pkgs.writeShellApplication {
+    name = "guardian-startup-files";
     runtimeInputs = with pkgs; [
       coreutils
       findutils
@@ -16,63 +16,63 @@ let
       util-linux
     ];
     text = ''
-      stan="$HOME/.local/state/straznik"
-      mkdir -p "$stan"
-      sciezki=(
+      state="$HOME/.local/state/guardian"
+      mkdir -p "$state"
+      paths=(
         "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
         "$HOME/.config/autostart" "$HOME/.config/systemd/user"
         "$HOME/.config/environment.d" "$HOME/.config/plasma-workspace/env"
         "$HOME/.config/plasma-workspace/shutdown" "$HOME/.ssh/authorized_keys"
         "$HOME/.ssh/config" "$HOME/.ssh/rc"
       )
-      nowe="$stan/sumy.nowe"
-      : > "$nowe"
-      for s in "''${sciezki[@]}"; do
-        [ -e "$s" ] && find "$s" -type f -exec sha256sum {} + >> "$nowe"
+      new="$state/sumy.nowe"
+      : > "$new"
+      for s in "''${paths[@]}"; do
+        [ -e "$s" ] && find "$s" -type f -exec sha256sum {} + >> "$new"
       done
-      sort -o "$nowe" "$nowe"
-      if [ -f "$stan/sumy" ] && ! cmp -s "$stan/sumy" "$nowe"; then
+      sort -o "$new" "$new"
+      if [ -f "$state/sumy" ] && ! cmp -s "$state/sumy" "$new"; then
         # diff zwraca 1, gdy są różnice – przy pipefail to nie jest błąd skryptu
-        zmiany=$({ diff "$stan/sumy" "$nowe" || true; } | grep -E '^[<>]' | awk '{print $1, $3}' | sort -u -k2 | head -20 || true)
-        logger -p user.warning -t straznik "Zmiana w plikach startowych: $zmiany"
-        notify-send -u critical -a Strażnik "Zmiana w plikach startowych" "$zmiany" || true
+        changes=$({ diff "$state/sumy" "$new" || true; } | grep -E '^[<>]' | awk '{print $1, $3}' | sort -u -k2 | head -20 || true)
+        logger -p user.warning -t guardian "Zmiana w plikach startowych: $changes"
+        notify-send -u critical -a Strażnik "Zmiana w plikach startowych" "$changes" || true
       fi
-      mv "$nowe" "$stan/sumy"
+      mv "$new" "$state/sumy"
     '';
   };
 
-  miejsceNaDysku = pkgs.writeShellApplication {
-    name = "straznik-miejsce";
+  diskSpaceWatcher = pkgs.writeShellApplication {
+    name = "guardian-disk-space";
     runtimeInputs = with pkgs; [
       coreutils
       libnotify
       util-linux
     ];
     text = ''
-      for punkt in / /mnt/games; do
-        [ -d "$punkt" ] || continue
-        zajete=$(df --output=pcent "$punkt" | tail -1 | tr -dc '0-9')
-        if [ "$zajete" -ge 85 ]; then
-          logger -p user.warning -t straznik "$punkt zajęte w $zajete%"
-          notify-send -u critical -a Strażnik "Mało miejsca" "$punkt zajęte w $zajete%" || true
+      for mountpoint in / /mnt/games; do
+        [ -d "$mountpoint" ] || continue
+        used=$(df --output=pcent "$mountpoint" | tail -1 | tr -dc '0-9')
+        if [ "$used" -ge 85 ]; then
+          logger -p user.warning -t guardian "$mountpoint zajęte w $used%"
+          notify-send -u critical -a Strażnik "Mało miejsca" "$mountpoint zajęte w $used%" || true
         fi
       done
     '';
   };
 
-  uslugaJacka = opis: program: {
-    description = opis;
+  jacekService = description: program: {
+    inherit description;
     unitConfig.ConditionUser = "Jacek";
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${program}/bin/${program.name}";
     };
   };
-  timerJacka = kiedy: {
+  jacekTimer = schedule: {
     wantedBy = [ "timers.target" ];
     unitConfig.ConditionUser = "Jacek";
     timerConfig = {
-      OnCalendar = kiedy;
+      OnCalendar = schedule;
       Persistent = true;
     };
   };
@@ -101,9 +101,9 @@ in
     enable = true;
     rules = [
       # polecenia wykonywane jako root przez zalogowanych użytkowników
-      "-a always,exit -F arch=b64 -S execve -F euid=0 -F auid>=1000 -F auid!=unset -k jako-root"
+      "-a always,exit -F arch=b64 -S execve -F euid=0 -F auid>=1000 -F auid!=unset -k as-root"
       # ładowanie / usuwanie modułów jądra
-      "-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k moduly"
+      "-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k modules"
       # klucze Secure Boot i sops
       "-w /var/lib/sbctl -p wa -k secureboot"
       "-w /var/lib/sops-nix -p wa -k sops"
@@ -111,15 +111,15 @@ in
   };
 
   # --- konto dla zadań okresowych (stały UID → reguła w OpenSnitch) ---
-  users.users.straznik = {
+  users.users.guardian = {
     isSystemUser = true;
     uid = 399;
-    group = "straznik";
+    group = "guardian";
   };
-  users.groups.straznik.gid = 399;
+  users.groups.guardian.gid = 399;
 
   systemd.services = {
-    nix-store-weryfikacja = {
+    nix-store-verification = {
       description = "Sprawdzenie integralności /nix/store";
       serviceConfig = {
         Type = "oneshot";
@@ -133,7 +133,7 @@ in
       path = [ config.nix.package ]; # vulnix woła nix-store / nix
       serviceConfig = {
         Type = "oneshot";
-        User = "straznik";
+        User = "guardian";
         StateDirectory = "vulnix";
         Environment = "HOME=/var/lib/vulnix";
         ExecStart = "${pkgs.vulnix}/bin/vulnix --system";
@@ -152,7 +152,7 @@ in
   };
 
   systemd.timers = {
-    nix-store-weryfikacja = {
+    nix-store-verification = {
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnCalendar = "weekly";
@@ -177,14 +177,14 @@ in
     };
   };
 
-  # --- strażnik w sesji Jacka (powiadomienia KDE) ---
+  # --- guardian w sesji Jacka (powiadomienia KDE) ---
   systemd.user.services = {
-    straznik-pliki-startowe = uslugaJacka "Strażnik: pliki startowe" plikiStartowe;
-    straznik-miejsce = uslugaJacka "Strażnik: miejsce na dysku" miejsceNaDysku;
+    guardian-startup-files = jacekService "Strażnik: pliki startowe" startupFilesWatcher;
+    guardian-disk-space = jacekService "Strażnik: miejsce na dysku" diskSpaceWatcher;
   };
   systemd.user.timers = {
-    straznik-pliki-startowe = timerJacka "hourly";
-    straznik-miejsce = timerJacka "hourly";
+    guardian-startup-files = jacekTimer "hourly";
+    guardian-disk-space = jacekTimer "hourly";
   };
 
   environment.systemPackages = with pkgs; [

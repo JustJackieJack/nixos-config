@@ -82,7 +82,7 @@ pkgs.testers.runNixOSTest {
 
     with subtest("strażnik działa w sesji Jacka (liczniki)"):
         out = pc.succeed(w_sesji("Jacek", "systemctl --user list-timers --all --no-pager"))
-        assert "straznik-pliki-startowe" in out and "straznik-miejsce" in out, out
+        assert "guardian-startup-files" in out and "guardian-disk-space" in out, out
 
     with subtest("menu: zwykły Steam/Heroic/Chromium/Firefox ukryte, są wersje game_user/claude/browse_user"):
         sw = "/run/current-system/sw/share/applications"

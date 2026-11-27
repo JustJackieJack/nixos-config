@@ -26,8 +26,8 @@ to świadomy wybór, nie wymóg.
 | `network/vpn-tunnel.nix` | tunel WireGuard (ProtonVPN) dla `vpn_user`/`tor_user` - `moje.vpn.enable` (domyślnie false, czeka na plik `.conf`), osobna tabela routingu |
 | `security/hardening.nix` | sysctl, parametry jądra, blokada modułów, sudo-rs, dbus-broker, hidepid |
 | `security/opensnitch.nix` | zapora aplikacyjna + okno pytań w sesji Jacka |
-| `users/konta.nix` | centralny rejestr kont (Jacek, claude, game_user, zeroroot, secure_user, dev_user, browse_user, vpn_user, tor_user): UID, hasło/widoczność na ekranie logowania, reguła polkit/sudo-rs dla ego, `/home/shared` (foldery Jacek↔claude), flaga `dostepRodzica` |
-| `users/szablony/{gry,dev,zerotrust,bank,browse,vpn,tor}.nix` | wielokrotnie używalne szablony kont (funkcje `{ nazwa, rodzic, ... }:`) wołane z `konta.nix` - każdy generuje własną, izolowaną grupę wymiany/dokumentów per instancja |
+| `users/konta.nix` | centralny rejestr kont (Jacek, claude, game_user, zeroroot, secure_user, dev_user, browse_user, vpn_user, tor_user): UID, hasło/widoczność na ekranie logowania, reguła polkit/sudo-rs dla ego, `/home/shared` (foldery Jacek↔claude), flaga `parentAccess` |
+| `users/szablony/{gry,dev,zerotrust,bank,browse,vpn,tor}.nix` | wielokrotnie używalne szablony kont (funkcje `{ name, parent, ... }:`) wołane z `konta.nix` - każdy generuje własną, izolowaną grupę wymiany/dokumentów per instancja |
 | `users/claude/` | Claude Code jako `claude`, `claude-view` / `claude-edit` / `claude-copy` / `claude-revoke`, `access-mcp` (`request_access` + `request_command`), Chromium (claude) |
 | `apps/games.nix` | Steam, Heroic (globalne pakiety/włączenia; konto per instancja w `szablony/gry.nix`), Proton-GE, gamescope, GameMode, Prism, Wine |
 | `users/kde-sync.nix` | `kde-sync export`/`apply <konto>` - migawka "wyglądu" KDE (panele, kolory, czcionki) do przeniesienia między kontami lub po reinstalacji |
