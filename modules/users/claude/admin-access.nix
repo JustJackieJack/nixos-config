@@ -13,7 +13,7 @@
 # every rebuild: setfacl just re-asserts the same entries, it isn't additive).
 { lib, pkgs, ... }:
 let
-  targetDir = "/home/wspolne/ClaudeFiles";
+  targetDir = "/home/shared/ClaudeFiles";
 
   # `name` is the subpath under both the real claude location and $targetDir.
   # `kind`: "dir" shares the whole directory (new files inside appear immediately - it's a

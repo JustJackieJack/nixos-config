@@ -55,7 +55,9 @@
     ];
 
   # --- Rozruch ---
-  boot.initrd.systemd.enable = true; # wymagane dla FIDO2 (YubiKey) przy odblokowaniu LUKS
+  # systemd w initrd - niezależne od LUKS (kiedyś wymagane dla FIDO2 przy odblokowaniu, dziś
+  # zostaje jako nowoczesny domyślny stage 1, i tak obowiązkowy od NixOS 26.11+).
+  boot.initrd.systemd.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   boot.loader.systemd-boot = {
     enable = lib.mkDefault true; # lanzaboote wyłącza to w secure-boot.nix

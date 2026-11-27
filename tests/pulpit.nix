@@ -2,7 +2,7 @@
 #
 # SDDM loguje Jacka automatycznie do Plasmy (Wayland). Sprawdzamy to, czego test bez pulpitu
 # nie widzi: okno pytań OpenSnitch w sesji, strażnika w sesji, ego (program okienkowy i dźwięk
-# jako game_user) oraz zeroroot-uruchom (ego → gamescope → bubblewrap).
+# jako game_user) oraz zeroroot-run (ego → gamescope → bubblewrap).
 # Grafika: wirtualna karta + programowy OpenGL/Vulkan (llvmpipe/lavapipe) – bez NVIDIA.
 { pkgs, inputs }:
 pkgs.testers.runNixOSTest {
@@ -84,12 +84,13 @@ pkgs.testers.runNixOSTest {
         out = pc.succeed(w_sesji("Jacek", "systemctl --user list-timers --all --no-pager"))
         assert "straznik-pliki-startowe" in out and "straznik-miejsce" in out, out
 
-    with subtest("menu: zwykły Steam/Heroic/Chromium ukryte, są wersje game_user/claude"):
+    with subtest("menu: zwykły Steam/Heroic/Chromium/Firefox ukryte, są wersje game_user/claude/browse_user"):
         sw = "/run/current-system/sw/share/applications"
-        for f in ["steam.desktop", "com.heroicgameslauncher.hgl.desktop", "chromium-browser.desktop"]:
+        for f in ["steam.desktop", "com.heroicgameslauncher.hgl.desktop", "chromium-browser.desktop", "firefox.desktop"]:
             pc.succeed(f"grep -q '^Hidden=true' {sw}/{f}")
         pc.succeed(f"grep -q 'ego --machinectl --user=game_user steam' {sw}/Steam-game-user.desktop")
         pc.succeed(f"grep -q 'ego --machinectl --user=claude chromium' {sw}/chromium-claude.desktop")
+        pc.succeed(f"grep -q 'ego --machinectl --user=browse_user firefox' {sw}/browse_user-firefox.desktop")
 
     with subtest("ego: program jako game_user widzi ekran i dźwięk Jacka"):
         out = pc.succeed(w_sesji("Jacek", "ego --machinectl --user=game_user sh -c 'id -un; wayland-info > /dev/null && echo WAYLAND-OK; pactl info | grep -i \"server name\"' < /dev/null"))
@@ -104,26 +105,26 @@ pkgs.testers.runNixOSTest {
         pc.sleep(5)
         pc.screenshot("2-konsole-game_user")
 
-    with subtest("zeroroot-uruchom: ego uruchamia gamescope jako zeroroot"):
-        pc.succeed(w_sesji("Jacek", "systemd-run --user --collect --unit=zeroroot-gamescope zeroroot-uruchom sh -c 'sleep 30'"))
+    with subtest("zeroroot-run: ego uruchamia gamescope jako zeroroot"):
+        pc.succeed(w_sesji("Jacek", "systemd-run --user --collect --unit=zeroroot-gamescope zeroroot-run sh -c 'sleep 30'"))
         pc.sleep(10)
         dziennik = pc.execute(w_sesji("Jacek", "journalctl --user -u zeroroot-gamescope --no-pager"))[1]
         assert "/home/zeroroot/.config/gamescope" in dziennik, "gamescope nie wystartował jako zeroroot:\n" + dziennik[-2000:]
         if "VK_EXT_physical_device_drm" in dziennik:
             print("OGRANICZENIE MASZYNY WIRTUALNEJ: gamescope wymaga prawdziwej karty (Vulkan z DRM) – "
-                  "llvmpipe go nie ma. Na RTX 2070 sprawdzić ręcznie: zeroroot-uruchom kitty")
+                  "llvmpipe go nie ma. Na RTX 2070 sprawdzić ręcznie: zeroroot-run kitty")
         pc.screenshot("3-zeroroot-gamescope")
 
     with subtest("piaskownica zeroroot (bubblewrap) uruchomiona przez ego – bez gamescope"):
-        wnetrze = pc.succeed("grep -o '/nix/store/[^ ]*-zeroroot-wnetrze/bin/zeroroot-wnetrze' $(readlink -f $(command -v zeroroot-uruchom)) | head -1").strip()
+        wnetrze = pc.succeed("grep -o '/nix/store/[^ ]*-zeroroot-inside/bin/zeroroot-inside' $(readlink -f $(command -v zeroroot-run)) | head -1").strip()
         skrypt = (
             "id -un; echo XDG=$XDG_RUNTIME_DIR; echo RUN_USER=[$(ls -A /run/user)]; "
             "echo WAYLAND=[$WAYLAND_DISPLAY]; echo PULSE=[$PULSE_SERVER]; "
             "(curl -sm3 http://127.0.0.1 > /dev/null 2>&1 && echo SIEC=JEST || echo SIEC=BRAK); "
             "(ls /home/Jacek > /dev/null 2>&1 && echo DOM_JACKA=WIDAC || echo DOM_JACKA=ZAMKNIETY); "
-            "(ls /home/wspolne > /dev/null 2>&1 && echo WSPOLNE=WIDAC || echo WSPOLNE=ZAMKNIETE); "
+            "(ls /home/shared > /dev/null 2>&1 && echo SHARED=WIDAC || echo SHARED=ZAMKNIETE); "
             "(touch /etc/x 2>/dev/null && echo SYSTEM=ZAPIS || echo SYSTEM=TYLKO_ODCZYT); "
-            "(touch /srv/zeroroot-wymiana/ok 2>/dev/null && echo WYMIANA=ZAPIS || echo WYMIANA=BRAK); "
+            "(touch /srv/zeroroot-exchange/ok 2>/dev/null && echo EXCHANGE=ZAPIS || echo EXCHANGE=BRAK); "
             "(ls /dev/dri > /dev/null 2>&1 && echo GPU=JEST || echo GPU=BRAK); "
             "echo PROCESY=$(ls /proc | grep -c '^[0-9]')"
         )
@@ -134,8 +135,8 @@ pkgs.testers.runNixOSTest {
         assert "RUN_USER=[]" in wynik, "w piaskownicy widać /run/user (Wayland/dźwięk Jacka)"
         assert "WAYLAND=[]" in wynik and "PULSE=[]" in wynik
         assert "SIEC=BRAK" in wynik
-        assert "DOM_JACKA=ZAMKNIETY" in wynik and "WSPOLNE=ZAMKNIETE" in wynik
-        assert "SYSTEM=TYLKO_ODCZYT" in wynik and "WYMIANA=ZAPIS" in wynik
+        assert "DOM_JACKA=ZAMKNIETY" in wynik and "SHARED=ZAMKNIETE" in wynik
+        assert "SYSTEM=TYLKO_ODCZYT" in wynik and "EXCHANGE=ZAPIS" in wynik
         assert "GPU=JEST" in wynik
         procesy = int(wynik.split("PROCESY=")[1].split()[0])
         assert procesy < 6, f"piaskownica widzi {procesy} procesów"

@@ -23,13 +23,14 @@ to świadomy wybór, nie wymóg.
 | `desktop/nvidia.nix` | RTX 2070, otwarte moduły |
 | `desktop/desktop.nix` | Plasma 6 (Wayland), PipeWire, drukarka, czcionki, Firefox, GnuPG, YubiKey |
 | `network/network.nix` | NetworkManager (stały MAC), resolved, nftables, avahi, bez SSH |
+| `network/vpn-tunnel.nix` | tunel WireGuard (ProtonVPN) dla `vpn_user`/`tor_user` - `moje.vpn.enable` (domyślnie false, czeka na plik `.conf`), osobna tabela routingu |
 | `security/hardening.nix` | sysctl, parametry jądra, blokada modułów, sudo-rs, dbus-broker, hidepid |
 | `security/opensnitch.nix` | zapora aplikacyjna + okno pytań w sesji Jacka |
-| `users/users.nix` | Jacek, claude, game_user, zeroroot, foldery wspólne, reguła polkit dla ego |
-| `users/claude/` | Claude Code jako `claude`, `claude-view` / `claude-edit` / `claude-copy` / `claude-revoke`, `access-mcp`, Chromium (claude) |
-| `apps/games.nix` | Steam, Heroic (jako game_user), Proton-GE, gamescope, GameMode, Prism, Wine |
-| `users/zeroroot.nix` | kwarantanna: bez sieci, gamescope + bubblewrap |
-| `users/secure.nix` | `secure_user`: utwardzony Firefox do banku i urzędów, start przez ego **z hasłem**, lista domen w OpenSnitch, YubiKey (FIDO2), dokumenty w `/home/secure-dokumenty` |
+| `users/konta.nix` | centralny rejestr kont (Jacek, claude, game_user, zeroroot, secure_user, dev_user, browse_user, vpn_user, tor_user): UID, hasło/widoczność na ekranie logowania, reguła polkit/sudo-rs dla ego, `/home/shared` (foldery Jacek↔claude), flaga `dostepRodzica` |
+| `users/szablony/{gry,dev,zerotrust,bank,browse,vpn,tor}.nix` | wielokrotnie używalne szablony kont (funkcje `{ nazwa, rodzic, ... }:`) wołane z `konta.nix` - każdy generuje własną, izolowaną grupę wymiany/dokumentów per instancja |
+| `users/claude/` | Claude Code jako `claude`, `claude-view` / `claude-edit` / `claude-copy` / `claude-revoke`, `access-mcp` (`request_access` + `request_command`), Chromium (claude) |
+| `apps/games.nix` | Steam, Heroic (globalne pakiety/włączenia; konto per instancja w `szablony/gry.nix`), Proton-GE, gamescope, GameMode, Prism, Wine |
+| `users/kde-sync.nix` | `kde-sync export`/`apply <konto>` - migawka "wyglądu" KDE (panele, kolory, czcionki) do przeniesienia między kontami lub po reinstalacji |
 | `security/monitoring.nix` | ClamAV, auditd, Lynis, `nix store verify`, vulnix, strażnik plików startowych i miejsca |
 | `system/backups.nix` | snapper (/home), restic → NAS, udział Modele_3D (dwa ostatnie po dodaniu sekretów) |
 | `apps/packages.nix` | aplikacje wybrane przy migracji (lista `APLIKACJE.md` z folderu migracji) |
@@ -37,9 +38,9 @@ to świadomy wybór, nie wymóg.
 
 Sprawdzenie bez instalowania (szczegóły i lista ręcznych testów: `TESTY_TODO.md`):
 - `nix build .#checks.x86_64-linux.justjackpc` – buduje cały system,
-- `nix build .#checks.x86_64-linux.vm -L` – test systemu w maszynie wirtualnej (28 grup),
+- `nix build .#checks.x86_64-linux.vm -L` – test systemu w maszynie wirtualnej (35 grup),
 - `nix build .#checks.x86_64-linux.pulpit -L` – test pulpitu (Plasma, OpenSnitch, ego, zeroroot),
-- `nix build .#checks.x86_64-linux.dyski -L` – instalacja na układzie disko, LUKS2 + FIDO2, btrfs, snapper.
+- `nix build .#checks.x86_64-linux.dyski -L` – instalacja na układzie disko, btrfs, snapper.
 
 ---
 
@@ -53,7 +54,7 @@ Sprawdzenie bez instalowania (szczegóły i lista ręcznych testów: `TESTY_TODO
 3. Skopiuj to repo na pendrive / `git clone` z Forgejo/GitHuba.
 4. W `modules/system/options.nix` **na pierwszy raz** ustaw `secureBoot.enable` na `false`
    (albo w `hosts/justjackpc/default.nix`: `moje.secureBoot.enable = false;`).
-5. Dyski (pyta o hasło LUKS = **klucz awaryjny**, od razu zapisz w Bitwardenie):
+5. Dyski:
    ```
    sudo nix --experimental-features "nix-command flakes" run github:nix-community/disko -- \
      --mode destroy,format,mount ./hosts/justjackpc/disko.nix
@@ -67,18 +68,10 @@ Sprawdzenie bez instalowania (szczegóły i lista ręcznych testów: `TESTY_TODO
    to ochrona przed uruchomieniem obcego systemu.
 
 ### Dane po instalacji (z kopii wg `Dane ostateczne.md`)
-- Obsidian i projekty → `/home/wspolne/Obsydian`, `/home/wspolne/Projekty` (w domu Jacka są do nich skróty).
+- Obsidian i projekty → `/home/shared/Obsidian`, `/home/shared/Projects` (w domu Jacka są do nich skróty).
 - Claude: `~/.claude`, `~/.claude.json`, `homelab-ai/` → do `/home/claude/`, potem
   `sudo chown -R claude:users /home/claude` (pamięć, ustawienia, MCP, klucze audytora homelabu są tylko u claude).
 - Prism `Serwer_Main` → `~/.local/share/PrismLauncher/instances/` (Prism z nix, nie z flatpaka).
-
-### YubiKey do LUKS (po pierwszym uruchomieniu)
-```
-sudo systemd-cryptenroll /dev/disk/by-partlabel/disk-system-luks --fido2-device=auto --fido2-with-client-pin=yes
-# to samo dla drugiego YubiKeya (podłącz tylko jeden naraz)
-sudo systemd-cryptenroll /dev/disk/by-partlabel/disk-system-luks    # lista: password + 2× fido2
-```
-Hasło (klucz awaryjny) zostaje jako zapas. **Nigdy nie resetuj FIDO2 na YubiKeyu** – kasuje też klucze SSH `sk`.
 
 ### Secure Boot
 1. `sudo sbctl create-keys`
@@ -106,15 +99,18 @@ Hasło (klucz awaryjny) zostaje jako zapas. **Nigdy nie resetuj FIDO2 na YubiKey
 | ego / game_user | menu → „Steam (game_user)” startuje, jest dźwięk | `journalctl --user -b`, reguła polkit |
 | Steam: biblioteka | Steam → Storage → dodaj `/mnt/games/SteamLibrary` | właściciel `/mnt/games` = game_user |
 | Heroic: biblioteka | Settings → Default installation path: `/mnt/games/Heroic` (prefiksy Wine też tam) | jw. |
-| OpenSnitch | Firefox bez pytań; Steam pyta; okno pytań ustawić: **Default action: deny, Duration: once, timeout 30–60 s** (Ustawienia → UI) | tryb „awaryjny” w menu rozruchu |
+| OpenSnitch | Steam pyta; okno pytań ustawić: **Default action: deny, Duration: once, timeout 30–60 s** (Ustawienia → UI) | tryb „awaryjny” w menu rozruchu |
 | OpenSnitch + ProtonVPN | aplikacja to Python → zapyta raz, odpowiedz „always” | – |
 | OpenSnitch + Jacek | `nix flake update`, `restic` jako Jacek zapytają (reguły systemowe są tylko dla roota) – „always” | – |
-| zeroroot | `zeroroot-uruchom kitty` → okno gamescope; w środku `curl example.com` = błąd, `ls /run/user` = pusto, brak dźwięku | `journalctl -k \| grep zeroroot` |
-| claude-view | `claude-view ~/Documents/plik.txt` → claude widzi oryginał (tylko odczyt) w `/home/wspolne/Shared/claude/`; po czasie znika (sprawdzone w teście VM) | `claude-revoke`, `claude-edit` (zapis), `claude-copy` (trwała kopia) |
+| zeroroot | `zeroroot-run kitty` → okno gamescope; w środku `curl example.com` = błąd, `ls /run/user` = pusto, brak dźwięku | `journalctl -k \| grep zeroroot` |
+| claude-view | `claude-view ~/Documents/plik.txt` → claude widzi oryginał (tylko odczyt) w `/home/shared/Views/claude/`; po czasie znika (sprawdzone w teście VM) | `claude-revoke`, `claude-edit` (zapis), `claude-copy` (trwała kopia) |
 | Remmina → Win7 | `win7-rdp.sh` z `openssl-legacy.cnf` | `OPENSSL_CONF` w skrypcie |
 | Drukarka | System Settings → Printers → Add → `socket://192.168.50.157:9100`, sterownik gutenprint (DCP-T500W) lub „IPP Everywhere”, jeśli wykryje | – |
 | Bank i urzędy | menu → „Bank i urzędy (secure_user)” → okienko hasła → Firefox. Dopisz domeny banku w `moje.secure.domeny` (host), inne strony OpenSnitch zgłosi pytaniem. YubiKey jako klucz logowania w banku/login.gov.pl | `journalctl --user -b`, reguła polkit |
 | Prism (mody) | `build.sh` w modach: ścieżki `~/.var/app/org.prismlauncher…` → `~/.local/share/PrismLauncher` | – |
+| Główna przeglądarka (browse_user) | menu → „Firefox (browse_user)” - bez hasła, pełna sieć. Firefox Jacka NIE istnieje (zablokowany w OpenSnitch, skrót ukryty) - to jedyna przeglądarka do zwykłego surfowania. Pobrane pliki lądują w `~/BrowserDownloads` (to samo widzi `browse_user`) | `journalctl --user -b`, reguła OpenSnitch `025-browse_user-firefox` |
+| dev_user (kodowanie) | menu → „VS Code (dev_user)” - bez hasła, rootless Podman. Klucze SSH ŁADUJE Jacek: `dev_user-ssh-add -c -t 8h ~/.ssh/klucz_pliku` (plikowy) albo `dev_user-ssh-add ~/.ssh/klucz_na_yubikeyu` (YubiKey) - `dev_user` nigdy nie ma własnego klucza, tylko dostęp do agenta Jacka przez przekaźnik | `journalctl --user -b dev_user-ssh-agent dev_user-ssh-agent-real` |
+| vpn_user/tor_user (VPN/Tor) | DZIŚ WYŁĄCZONE (`moje.vpn.enable = false`) - instrukcja dodania pliku `.conf` z ProtonVPN: nagłówek `modules/network/vpn-tunnel.nix`. Po włączeniu: menu → „Firefox przez VPN (vpn_user)” (zawsze VPN, kill switch) i „Tor Browser (tor_user)” (`sudo tor-vpn-on`/`sudo tor-vpn-off` - VPN pod Torem opcjonalny) | `systemctl status wireguard-wgVpn`, `ip rule list` |
 
 ## SSH (zamiast SSH Pilot)
 SSH Pilot nie jest w nixpkgs. Zamienniki:

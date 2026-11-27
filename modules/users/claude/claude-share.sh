@@ -15,13 +15,21 @@ mapping="$CLAUDE_SHARE_MAPPING"
 staging="/run/claude-share-staging" # private spot to verify before moving into $base
 
 # Creates (if needed) the given target account's subdirectory under $1, ACL'd to it only.
+# Base mode is 0700 (no group/other bits at all) - access comes PURELY from named-user ACL
+# entries below, never from Unix group bits. Using "-g shared" here once leaked read+traverse to
+# the WHOLE "shared" group (Jacek+claude), not just the intended target - caught when secure_user
+# was added as a target and claude could read what was shared to secure_user. Jacek ALSO needs his
+# own named ACL entry (not just membership in "shared") so claude-revoke - which lists this
+# directory as Jacek, before the actual removal happens via sudo as root - can still find what to
+# remove; relying on "shared" group membership for this would re-leak access to every OTHER
+# "shared" member (claude) too.
 prepare_target_dir() {
   local base_dir="$1" target_user="$2" target_dir
   target_dir="$base_dir/$target_user"
   if [ ! -d "$target_dir" ]; then
-    install -d -m 2750 -o root -g wspolne -- "$target_dir"
-    setfacl -m "u:$target_user:rx" -- "$target_dir"
-    setfacl -d -m "u:$target_user:rx" -- "$target_dir"
+    install -d -m 0700 -o root -g root -- "$target_dir"
+    setfacl -m "u:Jacek:rx,u:$target_user:rx" -- "$target_dir"
+    setfacl -d -m "u:Jacek:rx,u:$target_user:rx" -- "$target_dir"
   fi
   echo "$target_dir"
 }
@@ -88,8 +96,8 @@ case "${1:-}" in
       done
     fi
 
-    install -d -m 2750 -o root -g wspolne -- "$base"
-    install -d -m 2750 -o root -g wspolne -- "$forclient"
+    install -d -m 2750 -o root -g shared -- "$base"
+    install -d -m 2750 -o root -g shared -- "$forclient"
     name="$(basename -- "$p" | tr -c 'A-Za-z0-9._\n-' '_')"
     id="$(date +%Y%m%d-%H%M%S)-$$"
 

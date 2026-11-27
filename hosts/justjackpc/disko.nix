@@ -11,7 +11,7 @@ let
 in
 {
   disko.devices.disk = {
-    # Samsung 980 PRO 1 TB – system + /home, szyfrowany (LUKS2, YubiKey FIDO2 + PIN).
+    # Samsung 980 PRO 1 TB – system + /home, bez szyfrowania.
     system = {
       type = "disk";
       device = "/dev/disk/by-id/nvme-Samsung_SSD_980_PRO_1TB_S5GXNU0WC34243K";
@@ -28,54 +28,41 @@ in
               mountOptions = [ "umask=0077" ];
             };
           };
-          luks = {
+          root = {
             size = "100%";
             content = {
-              type = "luks";
-              name = "cryptroot";
-              # Hasło podawane przy instalacji = klucz awaryjny (zapisać w Bitwardenie).
-              # YubiKeye dopisuje się po instalacji: systemd-cryptenroll --fido2-device=auto --fido2-with-client-pin=yes
-              settings = {
-                allowDiscards = true;
-                crypttabExtraOpts = [
-                  "fido2-device=auto"
-                  "token-timeout=20"
-                ];
-              };
-              content = {
-                type = "btrfs";
-                extraArgs = [
-                  "-f"
-                  "-L"
-                  "nixos"
-                ];
-                subvolumes = {
-                  "@" = {
-                    mountpoint = "/";
-                    mountOptions = btrfsOpcje;
-                  };
-                  "@home" = {
-                    mountpoint = "/home";
-                    mountOptions = btrfsOpcje;
-                  };
-                  # Snapshoty /home (snapper) – osobny podwolumin, żeby nie wchodziły same w siebie.
-                  "@home-snapshots" = {
-                    mountpoint = "/home/.snapshots";
-                    mountOptions = btrfsOpcje;
-                  };
-                  # Dom game_usera osobno: nie trafia do snapshotów /home (cache shaderów, Proton).
-                  "@game_user" = {
-                    mountpoint = "/home/game_user";
-                    mountOptions = btrfsOpcje;
-                  };
-                  "@nix" = {
-                    mountpoint = "/nix";
-                    mountOptions = btrfsOpcje;
-                  };
-                  "@log" = {
-                    mountpoint = "/var/log";
-                    mountOptions = btrfsOpcje;
-                  };
+              type = "btrfs";
+              extraArgs = [
+                "-f"
+                "-L"
+                "nixos"
+              ];
+              subvolumes = {
+                "@" = {
+                  mountpoint = "/";
+                  mountOptions = btrfsOpcje;
+                };
+                "@home" = {
+                  mountpoint = "/home";
+                  mountOptions = btrfsOpcje;
+                };
+                # Snapshoty /home (snapper) – osobny podwolumin, żeby nie wchodziły same w siebie.
+                "@home-snapshots" = {
+                  mountpoint = "/home/.snapshots";
+                  mountOptions = btrfsOpcje;
+                };
+                # Dom game_usera osobno: nie trafia do snapshotów /home (cache shaderów, Proton).
+                "@game_user" = {
+                  mountpoint = "/home/game_user";
+                  mountOptions = btrfsOpcje;
+                };
+                "@nix" = {
+                  mountpoint = "/nix";
+                  mountOptions = btrfsOpcje;
+                };
+                "@log" = {
+                  mountpoint = "/var/log";
+                  mountOptions = btrfsOpcje;
                 };
               };
             };

@@ -52,9 +52,9 @@
         justjackpc = self.nixosConfigurations.justjackpc.config.system.build.toplevel;
         # Test w maszynie wirtualnej (moduły na żywym systemie): nix build .#checks.x86_64-linux.vm -L
         vm = import ./tests/vm.nix { inherit pkgs inputs; };
-        # Pulpit (Plasma, OpenSnitch UI, ego, zeroroot-uruchom): nix build .#checks.x86_64-linux.pulpit -L
+        # Pulpit (Plasma, OpenSnitch UI, ego, zeroroot-run): nix build .#checks.x86_64-linux.pulpit -L
         pulpit = import ./tests/pulpit.nix { inherit pkgs inputs; };
-        # Dyski (disko + LUKS2 + FIDO2 + btrfs + snapper, instalacja i rozruch): nix build .#checks.x86_64-linux.dyski -L
+        # Dyski (disko + btrfs + snapper, instalacja i rozruch): nix build .#checks.x86_64-linux.dyski -L
         dyski = import ./tests/dyski.nix { inherit pkgs inputs; };
       };
 

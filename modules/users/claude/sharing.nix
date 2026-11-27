@@ -14,8 +14,8 @@
 # of a file it doesn't own).
 { lib, pkgs, ... }:
 let
-  sharedDir = "/home/wspolne/Shared"; # view/edit: bind mounts, cleared on boot
-  forClientDir = "/home/wspolne/ForClient"; # copy: permanent copies, NOT cleared (delete by hand)
+  sharedDir = "/home/shared/Views"; # view/edit: bind mounts, cleared on boot
+  forClientDir = "/home/shared/Copies"; # copy: permanent copies, NOT cleared (delete by hand)
   mappingDir = "/run/claude-share"; # root-owned record of "who / which original", to drop the ACL on revoke
 
   # Accounts files may be taken FROM, and where each one may be read from.
@@ -56,12 +56,39 @@ let
       roots = [ "/home/zeroroot" ];
       protected = [ ];
     };
+    # secure_user/browse_user: own Firefox profile protected, same reasoning as Jacek's own
+    # .mozilla above - a live profile means cookies/active sessions, not just settings. This
+    # does NOT make these accounts off-limits as sources (that decision is "all accounts are
+    # fine", made explicitly) - it protects one specific, credential-bearing subpath within an
+    # otherwise-allowed source, exactly like every protected entry on Jacek's own line above.
+    secure_user = {
+      uid = 1004;
+      roots = [
+        "/home/secure_user"
+        "/home/secure-documents"
+      ];
+      protected = [ "profil-firefox" ];
+    };
+    dev_user = {
+      uid = 1005;
+      roots = [ "/home/dev_user" ];
+      protected = [ ".ssh" ];
+    };
+    browse_user = {
+      uid = 1006;
+      roots = [
+        "/home/browse_user"
+        "/home/browse_user-downloads"
+      ];
+      protected = [ "profil-firefox" ];
+    };
   };
   # Accounts that may be given something (recipients).
   allowedTargets = [
     "claude"
     "game_user"
     "zeroroot"
+    "secure_user" # secure-give/-revoke below (Jacek -> secure_user, one-off, time-limited)
   ];
 
   # Generates a bash `case` branch from `sourceAccounts`, setting uid/roots/protected variables.
@@ -195,12 +222,70 @@ let
       [ "$found" = 1 ] || echo "note: no active share found for $p (maybe it's a claude-copy copy?)" >&2
     '';
   };
+
+  # --- Jacek -> secure_user, one-off and time-limited ---
+  # For anything RECURRING/standing (e.g. always-there documents to attach), use the permanent
+  # /home/Paperwork folder (modules/users/konta.nix) instead - no command needed there at all.
+  # These two are for a single, more sensitive file you don't want sitting in Paperwork.
+  # No "secure-pull" (secure_user -> Jacek): downloads already land in /home/secure-documents,
+  # which Jacek can already read directly (group membership from modules/users/szablony/bank.nix) -
+  # a reverse-sharing mechanism here would just duplicate that.
+  secureGive = pkgs.writeShellApplication {
+    name = "secure-give";
+    runtimeInputs = with pkgs; [ coreutils ];
+    text = ''
+      duration="2h"
+      tryb="view"
+      while getopts "t:w" opt; do
+        case "$opt" in
+          t) duration="$OPTARG" ;;
+          w) tryb="edit" ;;
+          *) echo "usage: secure-give PATH [-t DURATION] [-w]" >&2; exit 1 ;;
+        esac
+      done
+      shift $((OPTIND - 1))
+      [ "$#" -eq 1 ] || { echo "usage: secure-give PATH [-t DURATION] [-w]  (DURATION e.g. 30min, 2h, 1d; default 2h; -w = edit instead of read-only)" >&2; exit 1; }
+      p="$(realpath -e -- "$1")" || { echo "does not exist: $1" >&2; exit 1; }
+      target="$(sudo -n ${shareBin} add "$tryb" Jacek secure_user "$p" "$duration")"
+      echo "secure_user ($tryb): $target (original: $p, expires in $duration)" >&2
+      echo "$target"
+    '';
+  };
+
+  secureRevoke = pkgs.writeShellApplication {
+    name = "secure-revoke";
+    runtimeInputs = with pkgs; [ coreutils ];
+    text = ''
+      if [ "$#" -eq 0 ]; then
+        echo "Revoking ALL of secure_user's access given via secure-give…"
+        sudo -n ${shareBin} remove secure_user
+        exit 0
+      fi
+      p="$(realpath -e -- "$1")" || { echo "does not exist: $1" >&2; exit 1; }
+      found=0
+      for target in ${sharedDir}/secure_user/*; do
+        [ -e "$target" ] || continue
+        if [ "$(stat -c %d:%i -- "$target" 2> /dev/null)" = "$(stat -c %d:%i -- "$p")" ]; then
+          sudo -n ${shareBin} remove secure_user "$target"
+          found=1
+        fi
+      done
+      [ "$found" = 1 ] || echo "note: no active share found for $p" >&2
+    '';
+  };
 in
 {
   options.moje.claude.shareBin = lib.mkOption {
     type = lib.types.str;
     readOnly = true;
     description = "Absolute /nix/store path to claude-share, for the sudo-rs rule and the access-mcp server.";
+  };
+
+  options.moje.claude.shareSourceAccounts = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    readOnly = true;
+    default = builtins.attrNames sourceAccounts;
+    description = "Account names claude-share accepts as a source, for access-mcp's request_access source_user validation.";
   };
 
   config = {
@@ -212,14 +297,16 @@ in
       claudeEdit
       claudeCopy
       claudeRevoke
+      secureGive
+      secureRevoke
     ];
 
     # "D": contents are wiped on boot - mounts are gone after a restart anyway, and empty mount
     # points would reveal the names of previously shared files (caught by the VM test).
     # ForClient (claude-copy copies) is NOT cleared - those are permanent, delete by hand.
     systemd.tmpfiles.rules = [
-      "D ${sharedDir} 2750 root wspolne -"
-      "d ${forClientDir} 2750 root wspolne -"
+      "D ${sharedDir} 2750 root shared -"
+      "d ${forClientDir} 2750 root shared -"
     ];
   };
 }

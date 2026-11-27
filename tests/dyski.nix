@@ -1,12 +1,8 @@
 # Test dysków w maszynie wirtualnej: nix build .#checks.x86_64-linux.dyski -L
 #
 # Prawdziwy przebieg instalacji z hosts/justjackpc/disko.nix na dwóch wirtualnych dyskach:
-# disko formatuje (GPT + ESP + LUKS2 + btrfs z podwoluminami, Lexar ext4), instalacja,
-# DOPISANIE KLUCZA FIDO2 (wirtualny klucz Canokey zamiast YubiKeya) i rozruch od nowa.
-# Odblokowanie LUKS ma się odbyć KLUCZEM, bez hasła – jeśli initrd nie obsługiwałby FIDO2,
-# rozruch zatrzymałby się na pytaniu o hasło i test by nie przeszedł.
-# Różnice wobec prawdziwego systemu: hasło LUKS z pliku (zamiast wpisywania przy instalacji),
-# Canokey bez PIN-u (YubiKey będzie z PIN-em), bez Secure Boot, bez pulpitu.
+# disko formatuje (GPT + ESP + btrfs z podwoluminami, Lexar ext4), instalacja i rozruch od nowa.
+# Różnice wobec prawdziwego systemu: bez Secure Boot, bez pulpitu.
 { pkgs, inputs }:
 let
   inherit (pkgs) lib;
@@ -16,16 +12,11 @@ let
     eval-config = import "${pkgs.path}/nixos/lib/eval-config.nix";
     qemu-common = import "${pkgs.path}/nixos/lib/qemu-common.nix";
   };
-  # ten sam układ co na komputerze, tylko hasło LUKS z pliku
-  diskoTestowy = lib.recursiveUpdate (import ../hosts/justjackpc/disko.nix) {
-    disko.devices.disk.system.content.partitions.luks.content.passwordFile = "/tmp/secret.key";
-  };
 in
 diskoLib.testLib.makeDiskoTest {
   inherit pkgs;
   name = "justjackpc-dyski";
-  disko-config = diskoTestowy;
-  enableCanokey = true;
+  disko-config = import ../hosts/justjackpc/disko.nix;
 
   extraSystemConfig =
     { lib, ... }:
@@ -35,6 +26,10 @@ diskoLib.testLib.makeDiskoTest {
         inputs.sops-nix.nixosModules.sops
         ../modules
       ];
+      # makeDiskoTest nie ma haczyka na specialArgs (inaczej niż pkgs.testers.runNixOSTest w
+      # tests/vm.nix/pulpit.nix) - ../modules (games.nix) potrzebuje "inputs" jako argumentu
+      # modułu (nixpkgs-unstable), więc dopisujemy go tak samo jak specialArgs by to zrobiło.
+      _module.args.inputs = inputs;
       networking.hostName = "pc";
       moje.lan = "192.168.1.0/24";
       moje.secureBoot.enable = false;
@@ -49,24 +44,8 @@ diskoLib.testLib.makeDiskoTest {
       services.opensnitch.enable = lib.mkForce false;
     };
 
-  # po formatowaniu, przed instalacją: klucz FIDO2 do LUKS (jak YubiKey po instalacji)
-  postDisko = ''
-    machine.succeed("systemd-cryptenroll --fido2-device=auto --fido2-with-client-pin=no --unlock-key-file=/tmp/secret.key /dev/disk/by-partlabel/disk-system-luks")
-    out = machine.succeed("${pkgs.cryptsetup}/bin/cryptsetup luksDump /dev/disk/by-partlabel/disk-system-luks")
-    assert "systemd-fido2" in out, "brak tokenu FIDO2 w nagłówku LUKS"
-  '';
-
   extraTestScript = ''
     machine.wait_for_unit("multi-user.target")
-
-    with subtest("LUKS2 odblokowany kluczem FIDO2 (bez hasła), z discard"):
-        out = machine.succeed("${pkgs.cryptsetup}/bin/cryptsetup status cryptroot")
-        print(out)
-        assert "LUKS2" in out, out
-        assert "discards" in out, "brak allowDiscards"
-        machine.succeed("journalctl -b | grep -iE 'fido2|security token' | head -5 >&2 || true")
-        dump = machine.succeed("${pkgs.cryptsetup}/bin/cryptsetup luksDump /dev/disk/by-partlabel/disk-system-luks")
-        assert "argon2id" in dump, "LUKS bez argon2id"
 
     with subtest("podwoluminy btrfs i punkty montowania jak w disko.nix"):
         for punkt, subvol in [("/", "@"), ("/home", "@home"), ("/home/.snapshots", "@home-snapshots"),

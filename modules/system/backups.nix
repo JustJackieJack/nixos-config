@@ -44,8 +44,8 @@ in
         paths = [
           "/home/Jacek"
           "/home/claude" # cała pamięć i ustawienia Claude
-          "/home/wspolne"
-          "/home/secure-dokumenty" # wyciągi i dokumenty z banku/urzędów (reszta secure_user – nie)
+          "/home/shared"
+          "/home/secure-documents" # wyciągi i dokumenty z banku/urzędów (reszta secure_user – nie)
         ];
         exclude = [
           "/home/*/.cache"
@@ -54,7 +54,7 @@ in
           "**/node_modules"
           "**/.direnv"
           "**/target"
-          "/home/wspolne/Udostepnione" # podmontowane pliki Jacka (są już w /home/Jacek)
+          "/home/shared/Views" # podmontowane pliki Jacka (są już w /home/Jacek)
         ];
         extraBackupArgs = [ "--exclude-caches" ];
         timerConfig = {

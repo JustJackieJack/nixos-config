@@ -86,7 +86,7 @@ in
     daemon.settings = {
       OnAccessIncludePath = [
         "/home/Jacek/Downloads"
-        "/srv/zeroroot-wymiana"
+        "/srv/zeroroot-exchange"
         "/home/zeroroot"
       ];
       OnAccessExcludeUname = "clamav";

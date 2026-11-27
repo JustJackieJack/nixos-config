@@ -16,10 +16,9 @@
     ./security/opensnitch.nix
     ./security/monitoring.nix
 
-    ./users/users.nix
+    ./users/konta.nix
     ./users/claude
-    ./users/zeroroot.nix
-    ./users/secure.nix
+    ./users/kde-sync.nix
 
     ./desktop/nvidia.nix
     ./desktop/desktop.nix
@@ -28,5 +27,6 @@
     ./apps/packages.nix
 
     ./network/network.nix
+    ./network/vpn-tunnel.nix
   ];
 }

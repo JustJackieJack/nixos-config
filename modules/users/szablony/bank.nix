@@ -1,14 +1,31 @@
-# secure_user – osobne konto z utwardzonym Firefoksem do banku i urzędów.
-#
-#  1. osobne konto (1004): Jacek, claude, gry i zeroroot nie widzą jego plików ani procesów,
-#  2. uruchamiane przez ego z menu („Bank i urzędy”), ale – inaczej niż gry – WYMAGA HASŁA Jacka
-#     (polkit, okienko KDE): program złośliwy na koncie Jacka nie otworzy tej sesji po cichu,
-#  3. Firefox z utwardzonym profilem (user.js tylko tutaj – zwykły Firefox Jacka bez zmian):
-#     tylko HTTPS, ścisła ochrona przed śledzeniem, punycode (fałszywe domeny widać), bez rozszerzeń,
-#     bez zapisywania haseł (Bitwarden), bez WebRTC i WebGL, historia czyszczona przy zamknięciu,
+# Szablon "bank": osobne konto z utwardzonym Firefoksem do banku i urzędów. Wołany z konta.nix,
+# raz per instancja (dziś tylko secure_user).
+#  1. izolacja: inne konta (w tym Jacek) nie widzą jego plików ani procesów,
+#  2. uruchamiane przez ego z menu, ale - inaczej niż szablony gry/dev/zerotrust - WYMAGA HASŁA
+#     (polkit, okienko KDE): program złośliwy na koncie Jacka nie otworzy tej sesji po cichu. Stąd
+#     to konto NIE ma pola `rodzic` w konta.nix - generowana tam bezhasłowa reguła by to łamała -
+#     własna, hasło-wymagająca reguła polkit jest tutaj, niezależna od tamtego mechanizmu.
+#  3. Firefox z utwardzonym profilem (user.js tylko tutaj),
 #  4. OpenSnitch: bez pytania tylko domeny z listy (moje.secure.domeny); każda inna strona = pytanie,
 #  5. YubiKey (FIDO2/WebAuthn) dostępny dla tego konta (reguła udev),
-#  6. dokumenty (wyciągi, PDF) w /home/secure-dokumenty – wspólne tylko z Jackiem, kopia restic.
+#  6. dokumenty - współdzielone tylko z Jackiem, kopia restic.
+#
+# moje.secure.domeny i grupa secure-fido (sprzęt, nie dane) zostają WSPÓLNE dla wszystkich
+# przyszłych instancji tego szablonu - świadome uproszczenie "do minimum". Grupa DOKUMENTÓW jest
+# już per-instancja (<nazwa>-documents, konto + opcjonalny `rodzic`) - dwie różne instancje nie
+# widzą nawzajem swoich dokumentów.
+# dokumenty: domyślnie katalog pochodny od nazwy konta, ale istniejąca instancja (secure_user)
+# podaje w konta.nix dzisiejszą, niezależną od nazwy ścieżkę (/home/secure-documents), bo ta
+# ścieżka jest też zahardkodowana w modules/system/backups.nix - zmiana wymagałaby zmiany tam też.
+{
+  nazwa,
+  rodzic ? null,
+  dokumenty ? "/home/${nazwa}-documents",
+  # wygodny skrót w domu rodzica do folderu dokumentów - opcjonalny, działa tylko gdy `rodzic`
+  # podany (istniejąca instancja, secure_user, podaje oba w konta.nix).
+  skrotJacek ? null,
+  ...
+}:
 {
   config,
   lib,
@@ -16,37 +33,26 @@
   ...
 }:
 let
-  uid = 1004;
-  dom = "/home/secure_user";
+  dom = "/home/${nazwa}";
   profil = "${dom}/profil-firefox";
-  dokumenty = "/home/secure-dokumenty";
 
-  # Nazwy ustawień sprawdzone z arkenfox user.js (v144). Celowo pominięte (psują banki):
-  # resistFingerprinting, wymuszanie bezpiecznej renegocjacji TLS, czyszczenie ciasteczek
-  # (bank pamięta „zaufane urządzenie”).
   ustawienia = {
-    # tylko HTTPS
     "dom.security.https_only_mode" = true;
     "dom.security.https_only_mode_send_http_background_request" = false;
-    # ochrona przed śledzeniem i fałszywymi domenami
     "browser.contentblocking.category" = "strict";
     "network.IDN_show_punycode" = true;
     "network.http.referer.XOriginTrimmingPolicy" = 2;
-    # hasła i formularze – nic nie zapisujemy (hasła w Bitwardenie)
     "signon.rememberSignons" = false;
     "signon.autofillForms" = false;
     "signon.formlessCapture.enabled" = false;
     "browser.formfill.enable" = false;
     "extensions.formautofill.addresses.enabled" = false;
     "extensions.formautofill.creditCards.enabled" = false;
-    # bez rozszerzeń
     "xpinstall.enabled" = false;
     "extensions.postDownloadThirdPartyPrompt" = false;
-    # mniejsza powierzchnia ataku
-    "media.peerconnection.enabled" = false; # WebRTC (uwaga: wideoweryfikacja w banku go wymaga)
+    "media.peerconnection.enabled" = false;
     "webgl.disabled" = true;
     "pdfjs.enableScripting" = false;
-    # bez połączeń „na zapas” i podpowiedzi wysyłających to, co piszesz
     "network.prefetch-next" = false;
     "network.dns.disablePrefetch" = true;
     "network.dns.disablePrefetchFromHTTPS" = true;
@@ -55,40 +61,36 @@ let
     "browser.places.speculativeConnect.enabled" = false;
     "browser.search.suggest.enabled" = false;
     "browser.urlbar.suggest.searches" = false;
-    # przy zamknięciu: pamięć podręczna, historia, formularze – tak; ciasteczka – nie
     "privacy.sanitize.sanitizeOnShutdown" = true;
     "privacy.clearOnShutdown_v2.cache" = true;
     "privacy.clearOnShutdown_v2.browsingHistoryAndDownloads" = true;
     "privacy.clearOnShutdown_v2.formdata" = true;
     "privacy.clearOnShutdown_v2.cookiesAndStorage" = false;
     "privacy.clearOnShutdown_v2.siteSettings" = false;
-    # pobrane pliki od razu do folderu wspólnego z Jackiem
     "browser.download.useDownloadDir" = true;
     "browser.download.folderList" = 2;
     "browser.download.dir" = dokumenty;
-    # start bez treści z internetu
     "browser.startup.homepage" = "about:blank";
     "browser.newtabpage.enabled" = false;
     "browser.aboutwelcome.enabled" = false;
     "datareporting.policy.dataSubmissionEnabled" = false;
   };
-  userJs = pkgs.writeText "secure-user.js" (
+  userJs = pkgs.writeText "${nazwa}-user.js" (
     lib.concatStrings (
       lib.mapAttrsToList (n: v: "user_pref(${builtins.toJSON n}, ${builtins.toJSON v});\n") ustawienia
     )
   );
 
-  # ^(.*\.)?(gov\.pl|zus\.pl|…)$ – domena z listy albo jej poddomena
   wzorzecDomen =
     "^(.*\\.)?("
     + lib.concatMapStringsSep "|" (lib.replaceStrings [ "." ] [ "\\." ]) config.moje.secure.domeny
     + ")$";
 
   skrot = pkgs.makeDesktopItem {
-    name = "secure-user-firefox";
-    desktopName = "Bank i urzędy (secure_user)";
-    comment = "Utwardzony Firefox na osobnym koncie – tylko bank i urzędy";
-    exec = "${pkgs.ego}/bin/ego --machinectl --user=secure_user firefox --new-instance --profile ${profil}";
+    name = "${nazwa}-firefox";
+    desktopName = "Bank i urzędy (${nazwa})";
+    comment = "Utwardzony Firefox na osobnym koncie - tylko bank i urzędy";
+    exec = "${pkgs.ego}/bin/ego --machinectl --user=${nazwa} firefox --new-instance --profile ${profil}";
     icon = "firefox";
     categories = [ "Network" ];
   };
@@ -97,69 +99,59 @@ in
   options.moje.secure.domeny = lib.mkOption {
     type = lib.types.listOf lib.types.str;
     default = [ ];
-    description = "Domeny, z którymi secure_user łączy się bez pytania (z poddomenami). Inne = pytanie OpenSnitch.";
+    description = "Domeny, z którymi konta bank łączą się bez pytania (z poddomenami). Inne = pytanie OpenSnitch.";
   };
 
   config = {
-    # Stała część listy jako DEFINICJA (nie wartość domyślna): wartość domyślna opcji nie łączy się
-    # z listą z hosta, tylko jest przez nią zastępowana – wtedy znikałyby gov.pl itd.
     moje.secure.domeny = [
-      # urzędy
-      "gov.pl" # login.gov.pl, mObywatel, ePUAP, podatki.gov.pl (e-Urząd Skarbowy), pacjent.gov.pl…
-      "zus.pl" # PUE/eZUS
-      # sam Firefox (aktualizacje list bezpieczeństwa, certyfikaty)
+      "gov.pl"
+      "zus.pl"
       "mozilla.org"
       "mozilla.net"
       "mozilla.com"
       "safebrowsing.googleapis.com"
-      # domeny banku: hosts/justjackpc/default.nix
     ];
 
     users.groups = {
-      secure-dokumenty.gid = 2003; # Jacek + secure_user
-      secure-fido.gid = 2004; # dostęp do kluczy FIDO2 (YubiKey) dla secure_user
+      "${nazwa}-documents" = { };
+      secure-fido.gid = 2003;
     };
-    users.users.secure_user = {
-      isNormalUser = true;
-      inherit uid;
-      description = "Bank i urzędy";
-      hashedPassword = "!";
-      extraGroups = [
-        "secure-dokumenty"
+    users.users = {
+      ${nazwa}.extraGroups = [
+        "${nazwa}-documents"
         "secure-fido"
       ];
+    } // lib.optionalAttrs (rodzic != null) {
+      ${rodzic}.extraGroups = [ "${nazwa}-documents" ];
     };
-    users.users.Jacek.extraGroups = [ "secure-dokumenty" ];
 
-    # ego/machinectl do secure_user: Jacek, ale z hasłem (zapamiętane na kilka minut)
+    # ego/machinectl do tego konta: Jacek, ale z hasłem (zapamiętane na kilka minut) - jedyne
+    # miejsce, gdzie ten dostęp jest regulowany (konta.nix nie generuje tu nic, patrz nagłówek).
     security.polkit.extraConfig = ''
       polkit.addRule(function(action, subject) {
         if (action.id == "org.freedesktop.machine1.host-shell" &&
-            subject.user == "Jacek" && action.lookup("user") == "secure_user") {
+            subject.user == "Jacek" && action.lookup("user") == "${nazwa}") {
           return polkit.Result.AUTH_SELF_KEEP;
         }
       });
     '';
 
-    # YubiKey dla przeglądarki secure_user (Jacek ma go i tak przez uaccess aktywnej sesji)
     services.udev.extraRules = ''
       SUBSYSTEM=="hidraw", ENV{ID_FIDO_TOKEN}=="1", GROUP="secure-fido", MODE="0660"
     '';
 
     systemd.tmpfiles.rules = [
-      "d ${profil} 0700 secure_user users -"
+      "d ${profil} 0700 ${nazwa} users -"
       "L+ ${profil}/user.js - - - - ${userJs}"
-      "d ${dokumenty} 2770 secure_user secure-dokumenty -"
-      "a+ ${dokumenty} - - - - default:group:secure-dokumenty:rwx,group:secure-dokumenty:rwx"
-      "L /home/Jacek/Dokumenty_bank - - - - ${dokumenty}"
-    ];
+      "d ${dokumenty} 2770 ${nazwa} ${nazwa}-documents -"
+      "a+ ${dokumenty} - - - - default:group:${nazwa}-documents:rwx,group:${nazwa}-documents:rwx"
+    ] ++ lib.optional (skrotJacek != null && rodzic != null) "L /home/${rodzic}/${skrotJacek} - - - - ${dokumenty}";
 
     environment.systemPackages = [ skrot ];
 
-    # OpenSnitch: domeny z listy bez pytania; reszta – pytanie (brak pasującej reguły)
     services.opensnitch.rules = lib.mkIf config.moje.opensnitch.enable {
-      "030-secure-domeny" = {
-        name = "030-secure-domeny";
+      "030-${nazwa}-domeny" = {
+        name = "030-${nazwa}-domeny";
         enabled = true;
         action = "allow";
         duration = "always";
@@ -173,7 +165,7 @@ in
               type = "simple";
               operand = "user.id";
               sensitive = false;
-              data = toString uid;
+              data = toString config.users.users.${nazwa}.uid;
             }
             {
               type = "regexp";
@@ -186,7 +178,6 @@ in
       };
     };
 
-    # dokumenty: skan przy zapisie (pobrane pliki) i kopia na NAS
     services.clamav.daemon.settings.OnAccessIncludePath = [ dokumenty ];
   };
 }

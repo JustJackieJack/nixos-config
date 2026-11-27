@@ -55,6 +55,37 @@ let
     };
   };
   zezwalajRootowi = nazwa: sciezka: zezwalajDlaUid nazwa sciezka "0";
+  # Blokada (nie pytanie oknem) dla konkretnej ścieżki+UID - precedence, sprawdzane przed resztą
+  # reguł, jak blokada zeroroot niżej. Dla Firefoksa Jacka: "ma nie istnieć" ma być twarde, nie
+  # "pytanie, które można kliknąć zawsze zezwól" - inaczej to żadna różnica wobec stanu przed
+  # izolacją w browse_user.
+  blokujDlaUid = nazwa: sciezka: uidStr: {
+    name = nazwa;
+    enabled = true;
+    precedence = true;
+    action = "reject";
+    duration = "always";
+    operator = {
+      type = "list";
+      operand = "list";
+      sensitive = false;
+      data = "";
+      list = [
+        {
+          type = "simple";
+          operand = "process.path";
+          sensitive = false;
+          data = sciezka;
+        }
+        {
+          type = "simple";
+          operand = "user.id";
+          sensitive = false;
+          data = uidStr;
+        }
+      ];
+    };
+  };
   uid = u: toString config.users.users.${u}.uid;
   nixCli = config.nix.package.nix-cli or config.nix.package;
 in
@@ -136,9 +167,11 @@ lib.mkIf config.moje.opensnitch.enable {
         };
 
         # --- przeglądarka główna ---
-        # tylko Firefox JACKA (UID 1000): Firefox na koncie secure_user ma własną listę domen
-        # (secure.nix), a reguła „zawsze” dla samej ścieżki by ją omijała
-        "020-firefox" = zezwalajDlaUid "020-firefox" "${pkgs.firefox-unwrapped}/lib/firefox/firefox" (
+        # Firefox JACKA (UID 1000) ma być zablokowany, nie "pytanie, które można kliknąć zawsze
+        # zezwól" - główna przeglądarka to teraz browse_user (ma WŁASNĄ regułę "zawsze zezwól",
+        # browse.nix), secure_user ma swoją listę domen (bank.nix) - Firefox Jacka wprost nie ma
+        # już żadnego uzasadnionego przypadku użycia, stąd blokada, nie reguła "allow".
+        "020-firefox-blokada-jacka" = blokujDlaUid "020-firefox-blokada-jacka" "${pkgs.firefox-unwrapped}/lib/firefox/firefox" (
           uid "Jacek"
         );
 
